@@ -5,6 +5,7 @@
     "": {
       "name": "@ghostry/aster",
       "devDependencies": {
+        "@ghostry/harness": "^0.0.6",
         "@rsdoctor/rspack-plugin": "^1.6.4",
         "@rslib/core": "^1.0.2",
         "@types/bun": "1.4.4",
@@ -59,6 +60,8 @@
     "@emnapi/runtime": ["@emnapi/runtime@2.0.0-beta.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ayb/PyyLzpwRyFVxeC0uoEHu59QlB1iWGcGsOpXQcaB/Dc+uGfBmNmpCHp3HmTT0t8lSsMmg3j7+tdJW/TlHjQ=="],
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@2.2.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JP7OYH38Q7+pyTAe14raZHLQIK7BDKbdwji+Xi3pcd/6QkJYQH3SX4wu6EplGrGJWRepoNzedfm0G3B9Z4e9Rw=="],
+
+    "@ghostry/harness": ["@ghostry/harness@0.0.6", "", {}, "sha512-+BrqhVpMYvNV8pkH2lK3sm+cc4hOOpbTkhbIjrRuHXH5UbRxlChBqqvGwDu0bsthdWqiCJLPlPamPNkzdF8ibg=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.7", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3" } }, "sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ=="],
 

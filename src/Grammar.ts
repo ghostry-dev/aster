@@ -36,7 +36,7 @@ function builder<$Rules extends RuleDefinition>(
         rules: Object.freeze(rules.slice()) as readonly $Rules[],
       });
     },
-  } satisfies GrammarBuilder<$Rules> as GrammarBuilder<$Rules>;
+  } satisfies GrammarBuilder<$Rules>;
 }
 
 /**

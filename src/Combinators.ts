@@ -1,3 +1,11 @@
+/**
+ * Every combinator returns frozen plain data: no closures, no class instances,
+ * nothing that would stop a rule body from being serialized or walked by a
+ * consumer that knows only the `kind` union.
+ *
+ * @module
+ */
+
 import type {
   Either,
   Expr,
@@ -7,12 +15,6 @@ import type {
   Repeat,
   Sequence,
 } from "./Types";
-
-/**
- * Every combinator returns frozen plain data: no closures, no class instances,
- * nothing that would stop a rule body from being serialized or walked by a
- * consumer that knows only the `kind` union.
- */
 
 /**
  * Match `value` exactly.
@@ -36,7 +38,7 @@ export function sequence<const $Items extends readonly Expr[]>(
 ): Sequence<$Items> {
   return Object.freeze({
     kind: "sequence",
-    items: Object.freeze(items.slice()) as unknown as $Items,
+    items: Object.freeze(items.slice()) as $Items,
   });
 }
 
@@ -48,9 +50,7 @@ export function either<const $Alternatives extends readonly [Expr, ...Expr[]]>(
 ): Either<$Alternatives> {
   return Object.freeze({
     kind: "either",
-    alternatives: Object.freeze(
-      alternatives.slice(),
-    ) as unknown as $Alternatives,
+    alternatives: Object.freeze(alternatives.slice()) as $Alternatives,
   });
 }
 

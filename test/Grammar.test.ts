@@ -10,7 +10,7 @@ import {
   zeroOrMore,
   type Vocabulary,
 } from "@ghostry/aster";
-import { expect, test } from "bun:test";
+import { attest, expect, test } from ".";
 
 test("rules are stored in definition order as name-referenced plain data", () => {
   const composed = grammar()
@@ -101,22 +101,16 @@ test("a rule named __proto__ is an own reference, not a prototype", () => {
 
 test("defining a name twice throws DuplicateRuleError naming the rule", () => {
   const base = grammar().define("digit", () => range("0", "9"));
-  const redefine = base.define as (
-    name: string,
-    build: () => ReturnType<typeof literal>,
-  ) => unknown;
 
-  let caught: unknown;
-  try {
-    redefine("digit", () => literal("0"));
-  } catch (error) {
-    caught = error;
-  }
+  const error = attest.throws(AsterError.DuplicateRuleError, () =>
+    // @ts-expect-error `digit` is already defined; the runtime check is under test
+    base.define("digit", () => literal("0")),
+  );
 
-  expect(caught).toBeInstanceOf(AsterError.DuplicateRuleError);
-  expect(caught).toBeInstanceOf(AsterError);
-  expect((caught as AsterError.DuplicateRuleError).rule).toBe("digit");
-  expect((caught as Error).message).toContain('"digit"');
+  expect(error).toBeInstanceOf(AsterError);
+  expect(error.name).toBe("@ghostry/aster:DuplicateRuleError");
+  expect(error.rule).toBe("digit");
+  expect(error.message).toContain('"digit"');
 });
 
 test("builders are immutable, so chains branch from a shared prefix", () => {

@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { attest, expect, test } from ".";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -33,9 +33,11 @@ test("the realistic stress grammar stays inside its instantiation budget", () =>
     output.split("\n").filter((line) => line.includes("error TS")),
   ).toEqual([]);
 
-  const match = output.match(/^Instantiations:\s+(\d+)/m);
-  expect(match?.[1]).toBeDefined();
-  const instantiations = Number(match?.[1]);
+  const match = attest.definitely(
+    output.match(/^Instantiations:\s+(\d+)/m),
+    "Instantiations line",
+  );
+  const instantiations = Number(match[1]);
   expect(instantiations).toBeGreaterThan(0);
   expect(instantiations).toBeLessThan(BUDGET);
 });

@@ -7,6 +7,12 @@
  * stands on its own: a consumer reading only `.message` should not need a field
  * to understand the failure. Fields are for programmatic access.
  *
+ * A `name` is the package and the class, `"@ghostry/aster:DuplicateRuleError"`,
+ * so it identifies an error where `instanceof` cannot: across two installed
+ * copies of this package, or after the error is serialized. `:`, not `/`, which
+ * would read as a subpath export. This is the convention every `@ghostry`
+ * package follows.
+ *
  * @module
  */
 
@@ -16,7 +22,7 @@
 export abstract class AsterError extends Error {
   constructor() {
     super();
-    this.name = "AsterError";
+    this.name = "@ghostry/aster:AsterError";
   }
 }
 
@@ -34,8 +40,10 @@ export namespace AsterError {
       public readonly rule: string,
     ) {
       super();
-      this.name = "AsterError.DuplicateRuleError";
-      this.message = `Rule "${rule}" is already defined in this grammar. Rule names are unique, and a rule cannot be redefined.`;
+      this.name = "@ghostry/aster:DuplicateRuleError";
+      this.message =
+        `Rule "${rule}" is already defined in this grammar. Rule names are `
+        + `unique, and a rule cannot be redefined.`;
     }
   }
 }
