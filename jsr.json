@@ -1,0 +1,6 @@
+{
+  "name": "@ghostry/aster",
+  "version": "0.0.0",
+  "exports": { ".": "./src/index.ts" },
+  "publish": { "include": ["src", "README.md", "LICENSE", "jsr.json"] }
+}
