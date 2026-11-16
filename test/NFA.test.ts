@@ -13,9 +13,9 @@ import {
   type Grammar,
   type RuleNames,
 } from "@ghostry/aster";
-import type { Expr } from "@ghostry/aster/unstable-ir";
 import { attest, describe, expect, test } from ".";
 import { backtrack, marks, type Event } from "./fixtures/backtrack";
+import { deep } from "./fixtures/deep";
 import { nearMisses } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
 
@@ -258,12 +258,11 @@ describe("grammars that arrive as data", () => {
  * program grows by a constant per level, and the oracle runs it. Rejection is
  * not exercised at this depth: the oracle backtracks through every level, so a
  * rejected input costs it O(depth²) steps. That is the oracle being a
- * backtracker, which the parser will not be.
+ * backtracker; `VM.test.ts` rejects at this depth.
  */
 test("a body nested a hundred thousand levels deep compiles linearly", () => {
   const DEPTH = 100_000;
-  let body: Expr = literal("ab");
-  for (let level = 0; level < DEPTH; level += 1) body = optional(body);
+  const body = deep(DEPTH);
   const program = compile(
     grammar()
       .define("deep", () => body)
@@ -271,7 +270,7 @@ test("a body nested a hundred thousand levels deep compiles linearly", () => {
     "deep",
   );
 
-  expect(program.instructions.length).toBeLessThanOrEqual(4 * DEPTH + 8);
+  expect(program.instructions.length).toBeLessThanOrEqual(5 * DEPTH + 8);
   expect(backtrack(program, "ab")).toHaveLength(DEPTH + 2);
-  expect(backtrack(program, "")).toHaveLength(2 + DEPTH);
+  expect(backtrack(program, "xxab")).toHaveLength(DEPTH + 2);
 });

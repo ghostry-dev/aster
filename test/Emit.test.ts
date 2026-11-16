@@ -14,8 +14,8 @@ import {
   type Grammar,
   type RuleNames,
 } from "@ghostry/aster";
-import type { Expr } from "@ghostry/aster/unstable-ir";
 import { attest, describe, expect, test } from ".";
+import { deep } from "./fixtures/deep";
 import { realistic } from "./stress/Realistic";
 
 const shapes = grammar()
@@ -166,7 +166,7 @@ describe("grammars that arrive as data", () => {
         },
       ],
     };
-    const error = attest.throws(AsterError.NullableRepetitionError, () =>
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
       toPattern(broken, "loop"),
     );
     expect(error.rule).toBe("loop");
@@ -203,13 +203,11 @@ describe("grammars that arrive as data", () => {
  */
 test("a body nested a hundred thousand levels deep emits", () => {
   const DEPTH = 100_000;
-  let body: Expr = literal("ab");
-  for (let level = 0; level < DEPTH; level += 1) body = optional(body);
+  const body = deep(DEPTH);
   const composed = grammar()
     .define("deep", () => body)
     .compose();
 
   const pattern = toPattern(composed, "deep", { anchored: false });
-  expect(pattern.startsWith("(?:".repeat(DEPTH))).toBe(true);
-  expect(pattern.endsWith(")?".repeat(DEPTH))).toBe(true);
+  expect(pattern).toBe(`${"x?".repeat(DEPTH)}ab`);
 });

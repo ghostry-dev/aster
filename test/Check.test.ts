@@ -12,6 +12,7 @@ import {
 } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
 import { attest, describe, expect, test } from ".";
+import { deep } from "./fixtures/deep";
 
 const base = grammar()
   .define("digit", () => range("0", "9"))
@@ -38,23 +39,24 @@ describe("repetition of an expression that can match nothing", () => {
   ];
 
   test.each(loops)("is rejected: %s", ({ row: [, body] }) => {
-    const error = attest.throws(AsterError.NullableRepetitionError, () =>
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
       base.define("loop", body),
     );
-    expect(error.name).toBe("@ghostry/aster:NullableRepetitionError");
+    expect(error.name).toBe("@ghostry/aster:NullableQuantifierError");
     expect(error.rule).toBe("loop");
+    expect(error.combinator).toBe("repeat");
     expect(error.message).toContain('"loop"');
   });
 
   test("is rejected through a reference to a nullable rule", () => {
-    const error = attest.throws(AsterError.NullableRepetitionError, () =>
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
       base.define("loop", ({ maybe }) => oneOrMore(maybe)),
     );
     expect(error.rule).toBe("loop");
   });
 
   test("is rejected through a chain of nullable references", () => {
-    const error = attest.throws(AsterError.NullableRepetitionError, () =>
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
       base
         .define("wrapped", ({ maybe }) => sequence([maybe, maybe]))
         .define("loop", ({ wrapped }) => zeroOrMore(wrapped)),
@@ -71,9 +73,53 @@ describe("repetition of an expression that can match nothing", () => {
         zeroOrMore(sequence([maybe, digit])),
       )
       .define("optionalOutside", () => optional(oneOrMore(literal("a"))))
-      .define("optionalTwice", ({ maybe }) => optional(maybe))
       .compose();
-    expect(composed.rules).toHaveLength(8);
+    expect(composed.rules).toHaveLength(7);
+  });
+});
+
+/**
+ * `?` is a quantifier in the emitted regex, and JS skips an optional whose body
+ * matched nothing, which the parser cannot reproduce. Such an `optional` adds
+ * nothing to the language, so it is rejected.
+ */
+describe("optional of an expression that can match nothing", () => {
+  const optionals: readonly (readonly [string, () => Expr])[] = [
+    ["empty literal", () => optional(literal(""))],
+    ["empty sequence", () => optional(sequence([]))],
+    ["nested optional", () => optional(optional(literal("a")))],
+    ["zeroOrMore", () => optional(zeroOrMore(literal("a")))],
+    [
+      "one nullable alternative",
+      () => optional(either(literal("a"), literal(""))),
+    ],
+  ];
+
+  test.each(optionals)("is rejected: %s", ({ row: [, body] }) => {
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
+      base.define("maybeNothing", body),
+    );
+    expect(error.name).toBe("@ghostry/aster:NullableQuantifierError");
+    expect(error.rule).toBe("maybeNothing");
+    expect(error.combinator).toBe("optional");
+    expect(error.message).toContain("optional()");
+  });
+
+  test("is rejected through a reference to a nullable rule", () => {
+    const error = attest.throws(AsterError.NullableQuantifierError, () =>
+      base.define("twice", ({ maybe }) => optional(maybe)),
+    );
+    expect(error.combinator).toBe("optional");
+  });
+
+  test("is allowed when the body always consumes input", () => {
+    const composed = base
+      .define("run", () => optional(oneOrMore(literal("a"))))
+      .define("signed", ({ maybe, digit }) =>
+        optional(sequence([maybe, digit])),
+      )
+      .compose();
+    expect(composed.rules).toHaveLength(4);
   });
 });
 
@@ -192,7 +238,7 @@ describe("bodies assembled by hand", () => {
 });
 
 test("a rejected definition leaves the builder usable", () => {
-  attest.throws(AsterError.NullableRepetitionError, () =>
+  attest.throws(AsterError.NullableQuantifierError, () =>
     base.define("loop", ({ maybe }) => zeroOrMore(maybe)),
   );
   const composed = base
@@ -213,8 +259,7 @@ describe("deep nesting", () => {
   const DEPTH = 100_000;
 
   test("a body nested a hundred thousand levels is checked", () => {
-    let body: Expr = literal("a");
-    for (let level = 0; level < DEPTH; level += 1) body = optional(body);
+    const body = deep(DEPTH);
     expect(
       grammar()
         .define("deep", () => body)
@@ -225,7 +270,7 @@ describe("deep nesting", () => {
   test("a violation at the bottom of a deep body is still found", () => {
     let body: Expr = zeroOrMore(literal(""));
     for (let level = 0; level < DEPTH; level += 1) body = sequence([body]);
-    attest.throws(AsterError.NullableRepetitionError, () =>
+    attest.throws(AsterError.NullableQuantifierError, () =>
       grammar().define("deep", () => body),
     );
   });

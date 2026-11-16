@@ -14,7 +14,7 @@ Define a grammar once. Use the regex where you need a fast yes or no in any engi
 </div>
 
 > [!WARNING]
-> Pre-release. Grammar definition, validation, the regex emitter, and the parser work; failure details beyond an offset, and ReDoS analysis, are not built yet. Nothing is published.
+> Pre-release. Grammar definition, validation, the regex emitter, and the parser work, and are fuzzed against each other; failure details beyond an offset, and ReDoS analysis, are not built yet. Nothing is published.
 
 ## Example
 
@@ -59,7 +59,7 @@ Patterns are anchored by default, have no capturing groups, and are valid under 
 
 Each builder receives only the rules defined before it, so every grammar is regular and always has a regex form. Nested formats (JSON, expressions) are out of scope for now.
 
-`.define()` validates each rule as it is added: range endpoints, repetition bounds, references, and loops whose body could match the empty string are all rejected, with an error that names the rule.
+`.define()` validates each rule as it is added: range endpoints, repetition bounds, references, and loops or `optional()`s whose body could match the empty string are all rejected, with an error that names the rule.
 
 ## License
 

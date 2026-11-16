@@ -57,7 +57,7 @@ export { toParser } from "./Parse";
  * library throws. Each subclass's `name` is `"@ghostry/aster:<Class>"`.
  * `.define()` throws `DuplicateRuleError`, `UnknownReferenceError`,
  * `InvalidRangeError`, `InvalidRepetitionError`, `EmptyEitherError`,
- * `NullableRepetitionError`, and `InvalidExpressionError`, each naming the
+ * `NullableQuantifierError`, and `InvalidExpressionError`, each naming the
  * rule. `toPattern`/`toRegExp`/`toParser` throw `UnknownRuleError`, plus any of
  * those for a grammar that arrived as data.
  */

@@ -178,25 +178,40 @@ export namespace AsterError {
   }
 
   /**
-   * Thrown by `.define()` when a repetition's body can match the empty string,
-   * directly or through a referenced rule. JS regex has special rules for empty
-   * loop iterations, and matching them exactly in the parser is not worth the
-   * complexity, so the construction is rejected instead.
+   * Thrown by `.define()` when the body of an `optional` or a repetition can
+   * match the empty string, directly or through a referenced rule.
+   *
+   * Both are quantifiers in the emitted regex (`?` is `{0,1}`), and JS rejects
+   * an iteration of a minimum-zero quantifier that matches nothing, then
+   * backtracks into another derivation. The parser cannot reproduce that check:
+   * it depends on where each iteration started, which a Pike VM's threads
+   * cannot carry without losing their linear bound. Rejecting the construction
+   * costs nothing in expressiveness, since such an `optional` accepts the same
+   * strings as its body alone, and such a repetition can be rewritten with the
+   * empty case moved outside it.
    */
-  export class NullableRepetitionError extends AsterError {
+  export class NullableQuantifierError extends AsterError {
     constructor(
       /**
-       * The rule whose body holds the repetition.
+       * The rule whose body holds the quantifier.
        */
       public readonly rule: string,
+      /**
+       * Which combinator's body can match the empty string.
+       */
+      public readonly combinator: "optional" | "repeat",
     ) {
       super();
-      this.name = "@ghostry/aster:NullableRepetitionError";
+      this.name = "@ghostry/aster:NullableQuantifierError";
       this.message =
-        `Rule "${rule}" repeats an expression that can match the empty `
-        + `string. Make the repeated expression always consume at least one `
-        + `character, for example by moving an optional() outside the `
-        + `repetition.`;
+        combinator === "optional"
+          ? `Rule "${rule}" has an optional() whose body can already match `
+            + `the empty string. Remove the optional(): the body accepts the `
+            + `same strings without it.`
+          : `Rule "${rule}" repeats an expression that can match the empty `
+            + `string. Make the repeated expression always consume at least `
+            + `one character, for example by moving an optional() outside the `
+            + `repetition.`;
     }
   }
 

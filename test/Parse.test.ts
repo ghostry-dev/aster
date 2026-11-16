@@ -16,8 +16,8 @@ import {
   type ParseResult,
   type RuleNames,
 } from "@ghostry/aster";
-import type { Expr } from "@ghostry/aster/unstable-ir";
 import { attest, describe, expect, test } from ".";
+import { deep } from "./fixtures/deep";
 import { nearMisses } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
 
@@ -334,9 +334,7 @@ describe("grammars that arrive as data", () => {
 describe("size", () => {
   test("a body nested a hundred thousand levels deep parses", () => {
     const DEPTH = 100_000;
-    let body: Expr = literal("ab");
-    for (let level = 0; level < DEPTH; level += 1)
-      body = sequence([optional(body)]);
+    const body = deep(DEPTH);
     const parse = toParser(
       grammar()
         .define("deep", () => body)
@@ -345,19 +343,18 @@ describe("size", () => {
     );
 
     /**
-     * The children nest one tuple per level. Every level prefers taking its
-     * optional body, and each body is nullable, so even the empty input nests
-     * all the way down, as the regex `(?:(?:…)?)?` would.
+     * The children nest one `[x, inner]` tuple per level, down to `"ab"`.
      */
-    const unwrap = (input: string): [number, unknown] => {
-      let value: unknown = parsed(parse(input)).children;
+    const unwrap = (input: string): [number, unknown, unknown] => {
+      const root: unknown = parsed(parse(input)).children;
+      let value = root;
       let depth = 0;
-      for (; Array.isArray(value); depth += 1) value = value[0];
-      return [depth, value];
+      for (; Array.isArray(value); depth += 1) value = value[1];
+      return [depth, value, Array.isArray(root) ? root[0] : root];
     };
-    expect(unwrap("ab")).toEqual([DEPTH, "ab"]);
-    expect(unwrap("")).toEqual([DEPTH, undefined]);
-    expect(parse("abab")).toEqual({ ok: false, offset: 2 });
+    expect(unwrap("ab")).toEqual([DEPTH, "ab", undefined]);
+    expect(unwrap("xab")).toEqual([DEPTH, "ab", "x"]);
+    expect(parse("abx")).toEqual({ ok: false, offset: 2 });
   });
 
   test("a hundred thousand iterations of a named rule parse", () => {

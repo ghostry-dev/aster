@@ -132,8 +132,8 @@ function validate(
 
 /**
  * Whether a node can match the empty string, given the same answer for each of
- * its subexpressions in order. A repetition of a nullable body is rejected
- * here, since this is the first point its body's answer is known.
+ * its subexpressions in order. An `optional` or a repetition of a nullable body
+ * is rejected here, since this is the first point its body's answer is known.
  */
 function close(
   rule: string,
@@ -153,9 +153,12 @@ function close(
     case "either":
       return own.some(Boolean);
     case "optional":
+      if (own[0] === true)
+        throw new AsterError.NullableQuantifierError(rule, "optional");
       return true;
     case "repeat":
-      if (own[0] === true) throw new AsterError.NullableRepetitionError(rule);
+      if (own[0] === true)
+        throw new AsterError.NullableQuantifierError(rule, "repeat");
       return expr.min === 0;
   }
 }

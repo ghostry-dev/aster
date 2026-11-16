@@ -61,6 +61,7 @@
     "check:ts5": "bun --bun ./node_modules/typescript-5/lib/tsc.js --noEmit",
     "check:jsr": "DENO_BIN_PATH=$PWD/node_modules/.bin/deno bunx --no-install jsr publish --dry-run --allow-dirty",
     "bench:types": "bun ./scripts/stress.ts",
+    "fuzz": "FUZZ_RUNS=20000 bun test ./test/Fuzz.test.ts",
     "format": "bunx --no-install oxfmt .",
     "test": "bun run check && bun run check:ts5 && bun run check:jsr && bun test",
     "verify": "bun run build && bun run test"

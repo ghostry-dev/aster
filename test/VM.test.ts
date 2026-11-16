@@ -17,6 +17,7 @@ import {
 import type { Expr } from "@ghostry/aster/unstable-ir";
 import { describe, expect, test } from ".";
 import { backtrack } from "./fixtures/backtrack";
+import { deep } from "./fixtures/deep";
 import { strings } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
 
@@ -184,8 +185,7 @@ describe("linear time", () => {
 
   test("a body nested a hundred thousand levels deep accepts and rejects", () => {
     const DEPTH = 100_000;
-    let body: Expr = literal("ab");
-    for (let level = 0; level < DEPTH; level += 1) body = optional(body);
+    const body = deep(DEPTH);
     const program = compile(
       grammar()
         .define("deep", () => body)
@@ -193,8 +193,9 @@ describe("linear time", () => {
       "deep",
     );
     expect(events(program, "ab")).toHaveLength(DEPTH + 2);
-    expect(events(program, "")).toHaveLength(DEPTH + 2);
-    expect(run(program, "abc")).toEqual({ ok: false, offset: 2 });
-    expect(run(program, "a")).toEqual({ ok: false, offset: 1 });
+    expect(events(program, "xxab")).toHaveLength(DEPTH + 2);
+    expect(run(program, "abx")).toEqual({ ok: false, offset: 2 });
+    expect(run(program, "xa")).toEqual({ ok: false, offset: 2 });
+    expect(run(program, "")).toEqual({ ok: false, offset: 0 });
   });
 });
