@@ -16,9 +16,9 @@ import {
 } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
 import { describe, expect, test } from ".";
-import { backtrack } from "./fixtures/backtrack";
+import { backtrack, furthest } from "./fixtures/backtrack";
 import { deep } from "./fixtures/deep";
-import { strings } from "./fixtures/inputs";
+import { nearMisses, strings } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
 
 type Realistic = RuleNames<typeof realistic>;
@@ -94,8 +94,71 @@ describe("the VM picks the derivation backtracking picks", () => {
         input,
         backtrack(program, input),
       ]);
+      expect([input, failure(program, input)]).toEqual([
+        input,
+        furthest(program, input),
+      ]);
     }
   });
+});
+
+/**
+ * The VM's failure in the oracle's shape, or `undefined` if it accepted.
+ */
+function failure(program: Program, input: string) {
+  const result = run(program, input);
+  return result.ok
+    ? undefined
+    : { offset: result.offset, expected: result.expected };
+}
+
+/**
+ * The oracle explores every path and replays each one forward to find its open
+ * rules, sharing nothing with the VM's lockstep threads or its backward,
+ * memoized stacks. Equal reports mean the VM fails at the furthest offset any
+ * derivation reached, and expects there what the surviving threads expected.
+ */
+describe("failures match the oracle", () => {
+  test("with named rules, on every string up to length 6", () => {
+    const composed = grammar()
+      .define("a", () => literal("a"))
+      .define("b", () => literal("b"))
+      .define("pair", ({ a, b }) => sequence([a, b]))
+      .define("rule", ({ a, b, pair }) =>
+        sequence([
+          zeroOrMore(either(a, pair, b)),
+          optional(pair),
+          literal("c"),
+          either(b, sequence([a, a]), literal("")),
+        ]),
+      )
+      .compose();
+    const program = compile(composed, "rule");
+    for (const input of strings(["a", "b", "c"], 6))
+      expect([input, failure(program, input)]).toEqual([
+        input,
+        furthest(program, input),
+      ]);
+  });
+
+  const accepted: readonly (readonly [Realistic, string])[] = [
+    ["timestamp", "2026-11-15T09:30:00.123+05:30"],
+    ["semver", "10.20.30-alpha.1+build.5"],
+    ["ipv4", "192.168.0.1"],
+    ["uri", "s3+x://10.0.0.1:9000/bucket"],
+  ];
+
+  test.each(accepted)(
+    "%s, on the near misses of %p",
+    ({ row: [rule, input] }) => {
+      const program = compile(realistic, rule);
+      for (const candidate of nearMisses(input))
+        expect([candidate, failure(program, candidate)]).toEqual([
+          candidate,
+          furthest(program, candidate),
+        ]);
+    },
+  );
 });
 
 describe("membership agrees with the emitted regex", () => {
@@ -140,7 +203,7 @@ describe("failure offsets", () => {
   ];
 
   test.each(cases)("%p fails at %d", ({ row: [input, offset] }) => {
-    expect(run(program, input)).toEqual({ ok: false, offset });
+    expect(run(program, input)).toMatchObject({ ok: false, offset });
   });
 });
 
@@ -159,7 +222,7 @@ describe("code points", () => {
   });
 
   test("a lone surrogate is one code point, outside an astral range", () => {
-    expect(run(program, "😀\uD83D")).toEqual({ ok: false, offset: 2 });
+    expect(run(program, "😀\uD83D")).toMatchObject({ ok: false, offset: 2 });
   });
 });
 
@@ -179,7 +242,10 @@ describe("linear time", () => {
       .compose();
     const program = compile(composed, "rule");
     const input = "a".repeat(20_000);
-    expect(run(program, input)).toEqual({ ok: false, offset: input.length });
+    expect(run(program, input)).toMatchObject({
+      ok: false,
+      offset: input.length,
+    });
     expect(run(program, `${input}b`).ok).toBe(true);
   });
 
@@ -194,8 +260,8 @@ describe("linear time", () => {
     );
     expect(events(program, "ab")).toHaveLength(DEPTH + 2);
     expect(events(program, "xxab")).toHaveLength(DEPTH + 2);
-    expect(run(program, "abx")).toEqual({ ok: false, offset: 2 });
-    expect(run(program, "xa")).toEqual({ ok: false, offset: 2 });
-    expect(run(program, "")).toEqual({ ok: false, offset: 0 });
+    expect(run(program, "abx")).toMatchObject({ ok: false, offset: 2 });
+    expect(run(program, "xa")).toMatchObject({ ok: false, offset: 2 });
+    expect(run(program, "")).toMatchObject({ ok: false, offset: 0 });
   });
 });

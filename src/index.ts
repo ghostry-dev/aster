@@ -48,7 +48,9 @@ export { toPattern, toRegExp, type PatternOptions } from "./Emit";
  * exactly the strings `toRegExp` accepts, returns the derivation JS regex
  * backtracking would pick as a typed {@link Node} tree with spans, and runs in
  * time linear in the input for every grammar. A non-matching input is a
- * {@link ParseFailure} result, never an exception.
+ * {@link ParseFailure} result, never an exception: the furthest offset any
+ * derivation reached, what was expected there, and a message with its line and
+ * column.
  */
 export { toParser } from "./Parse";
 
@@ -75,13 +77,15 @@ export { AsterError } from "./Error";
  * expression contributes to its enclosing rule's node, resolving references by
  * name. Inference runs only when one of them is used, never at each `.define()`
  * link. `Parser` is what `toParser` returns, and `ParseResult` what a parser
- * returns: a `ParseSuccess` holding the root node or a `ParseFailure`.
+ * returns: a `ParseSuccess` holding the root node or a `ParseFailure`, whose
+ * `expected` entries are `Expectation`s.
  */
 export type {
   Ast,
   AstOf,
   Children,
   Either,
+  Expectation,
   Expr,
   Grammar,
   GrammarBuilder,

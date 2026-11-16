@@ -14,7 +14,7 @@ Define a grammar once. Use the regex where you need a fast yes or no in any engi
 </div>
 
 > [!WARNING]
-> Pre-release. Grammar definition, validation, the regex emitter, and the parser work, and are fuzzed against each other; failure details beyond an offset, and ReDoS analysis, are not built yet. Nothing is published.
+> Pre-release. Grammar definition, validation, the regex emitter, and the parser with its failure reports work, and are fuzzed against each other; ReDoS analysis is not built yet. Nothing is published.
 
 ## Example
 
@@ -50,10 +50,15 @@ if (result.ok) {
   year.text; // "2026"
   month.span; // { start: 5, end: 7 }
 }
-parse("2026-1x"); // { ok: false, offset: 6 }
+const failed = parse("2026-x1");
+if (!failed.ok) {
+  failed.message; // 'Expected month at 1:6, found "x".'
+  failed.expected; // [{ kind: "rule", rule: "month" }]
+  failed.span; // { start: 5, end: 6 }
+}
 ```
 
-The parser accepts exactly the strings the regex accepts. Where an input could be split more than one way, it returns the split the regex would make. Every loop iteration is kept, unlike a regex capture inside a loop. It runs in time linear in the input for every grammar, so it is safe on input that would make a backtracking regex hang.
+The parser accepts exactly the strings the regex accepts. Where an input could be split more than one way, it returns the split the regex would make. Every loop iteration is kept, unlike a regex capture inside a loop. It runs in time linear in the input for every grammar, so it is safe on input that would make a backtracking regex hang. When an input does not match, the parser reports the furthest point any reading of it reached, what could have come next there, and the line and column.
 
 Patterns are anchored by default, have no capturing groups, and are valid under both the `v` flag and the `u` flag, so they work as a JSON Schema `pattern`.
 

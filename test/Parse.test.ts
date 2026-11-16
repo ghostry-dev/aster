@@ -13,6 +13,7 @@ import {
   type AstOf,
   type Grammar,
   type Node,
+  type ParseFailure,
   type ParseResult,
   type RuleNames,
 } from "@ghostry/aster";
@@ -25,8 +26,17 @@ type Realistic = RuleNames<typeof realistic>;
 type AnyNode = Node<string, unknown>;
 
 function parsed<$Node>(result: ParseResult<$Node>): $Node {
-  if (!result.ok) throw new Error(`failed at ${result.offset}`);
+  if (!result.ok) throw new Error(result.message);
   return result.node;
+}
+
+function rejected<$Node>(result: ParseResult<$Node>): ParseFailure {
+  if (result.ok) throw new Error(`parsed as ${result.node}`);
+  return result;
+}
+
+function failedAt<$Node>(result: ParseResult<$Node>): number {
+  return rejected(result).span.start;
 }
 
 function isNode(value: unknown): value is AnyNode {
@@ -102,9 +112,9 @@ describe("nodes", () => {
   });
 
   test("a non-matching input is a failure result, not an exception", () => {
-    expect(parse("2026-1x")).toEqual({ ok: false, offset: 6 });
-    expect(parse("2026-110")).toEqual({ ok: false, offset: 7 });
-    expect(parse("")).toEqual({ ok: false, offset: 0 });
+    expect(failedAt(parse("2026-1x"))).toBe(6);
+    expect(failedAt(parse("2026-110"))).toBe(7);
+    expect(failedAt(parse(""))).toBe(0);
   });
 
   test("a parser is reusable", () => {
@@ -354,7 +364,7 @@ describe("size", () => {
     };
     expect(unwrap("ab")).toEqual([DEPTH, "ab", undefined]);
     expect(unwrap("xab")).toEqual([DEPTH, "ab", "x"]);
-    expect(parse("abx")).toEqual({ ok: false, offset: 2 });
+    expect(failedAt(parse("abx"))).toBe(2);
   });
 
   test("a hundred thousand iterations of a named rule parse", () => {

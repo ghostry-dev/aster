@@ -293,13 +293,39 @@ export interface ParseSuccess<$Node> {
 }
 
 /**
- * A failed parse. `offset` is where the last candidate derivation died: the
- * start of the first code point nothing could consume, or the end of the input
- * if derivations reached it but none was complete.
+ * Something a parse could have continued with at the point it failed.
+ *
+ * - `rule`: a named rule that would have started there. Where several rules start
+ *   at that offset, one inside another, the outermost is reported: a date's
+ *   `month`, not the `digit` that begins it.
+ * - `characters`: one code point from these inclusive ranges, where no named rule
+ *   starts at that offset, such as the `-` between a year and a month. Ranges
+ *   are sorted and merged across everything anonymous that was expected, so
+ *   there is at most one such entry.
+ * - `end`: the end of the input. A complete match was found, but the input
+ *   continues.
+ */
+export type Expectation =
+  | { readonly kind: "rule"; readonly rule: string }
+  | {
+      readonly kind: "characters";
+      readonly ranges: readonly (readonly [string, string])[];
+    }
+  | { readonly kind: "end" };
+
+/**
+ * A failed parse, reported at the furthest offset any derivation reached.
+ *
+ * `span` starts there and covers the code point found, so it is empty when the
+ * input ran out. `expected` lists what could have come next, in priority order,
+ * without duplicates. `message` says the same for a person, with a 1-based line
+ * and a column counted in code points.
  */
 export interface ParseFailure {
   readonly ok: false;
-  readonly offset: number;
+  readonly span: Span;
+  readonly expected: readonly Expectation[];
+  readonly message: string;
 }
 
 /**

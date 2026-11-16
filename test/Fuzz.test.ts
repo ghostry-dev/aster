@@ -5,7 +5,9 @@ import {
   toRegExp,
   type Grammar,
 } from "@ghostry/aster";
+import { compile, type Program } from "#internal/NFA";
 import { expect, test } from ".";
+import { furthest } from "./fixtures/backtrack";
 import {
   capturing,
   captured,
@@ -22,6 +24,8 @@ import { Random } from "./fixtures/random";
  *
  * - **Membership.** `toRegExp` (the `v` flag), the same pattern under `u`, and
  *   the parser accept exactly the same inputs.
+ * - **Failure.** Where they reject, the parser fails where the backtracking
+ *   oracle's furthest path ended, expecting what the oracle expects there.
  * - **Derivation.** Where they accept, the parser's AST and JS's own captures
  *   describe the same derivation. {@link capturing} builds a regex with a group
  *   around every subexpression, independently of the emitter, and JS's match
@@ -35,6 +39,22 @@ import { Random } from "./fixtures/random";
  */
 const RUNS = Number(process.env["FUZZ_RUNS"] ?? 300);
 const SEED = Number(process.env["FUZZ_SEED"] ?? 1);
+
+/**
+ * The oracle's failure report, unless it would take too long: it explores every
+ * path, which on a random ambiguous grammar can be exponential. Those inputs
+ * still get the membership and derivation checks.
+ */
+function furthestWithin(
+  program: Program,
+  input: string,
+): ReturnType<typeof furthest> | "too slow" {
+  try {
+    return furthest(program, input, 200_000);
+  } catch {
+    return "too slow";
+  }
+}
 
 interface Failure {
   readonly seed: number;
@@ -97,6 +117,7 @@ test(
         const v = toRegExp(grammar, rule);
         const u = new RegExp(toPattern(grammar, rule), "u");
         const parse = toParser(grammar, rule);
+        const program = compile(grammar, rule);
         const oracle = capturing(grammar, rule);
         const fail = (
           input: string,
@@ -125,6 +146,18 @@ test(
           if (result.ok !== matches) {
             fail(input, "regex and parser disagree", matches, result.ok);
             continue;
+          }
+          if (!result.ok) {
+            const reached = furthestWithin(program, input);
+            const reported = {
+              offset: result.span.start,
+              expected: result.expected,
+            };
+            if (
+              reached !== "too slow"
+              && JSON.stringify(reported) !== JSON.stringify(reached)
+            )
+              fail(input, "a different failure", reached, reported);
           }
           const spans = captured(oracle, input);
           if ((spans !== undefined) !== matches) {

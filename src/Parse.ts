@@ -1,3 +1,4 @@
+import { failure } from "./Failure";
 import { compile } from "./NFA";
 import { Source, SourceSpan } from "./Source";
 import type {
@@ -50,8 +51,9 @@ export function toParser<
 
   return (input) => {
     const result = run(program, input);
-    if (!result.ok) return { ok: false, offset: result.offset };
-    const node = replay(rule, result.events, input, bodies, sizes);
+    const source = new Source(input);
+    if (!result.ok) return failure(source, result.offset, result.expected);
+    const node = replay(rule, result.events, source, bodies, sizes);
     return { ok: true, node: node as AstOf<$Grammar, $Name> };
   };
 }
@@ -131,11 +133,11 @@ type Frame =
 function replay(
   rule: string,
   events: readonly Event[],
-  input: string,
+  source: Source,
   bodies: ReadonlyMap<string, Expr>,
   sizes: ReadonlyMap<Expr, number>,
 ): unknown {
-  const source = new Source(input);
+  const { input } = source;
   let cursor = 0;
   let at = 0;
 
