@@ -6,9 +6,12 @@ import {
   optional,
   range,
   sequence,
+  toParser,
   zeroOrMore,
   type AstOf,
+  type Grammar as AnyGrammar,
   type Node,
+  type ParseResult,
   type RuleNames,
   type RuleRef,
 } from "@ghostry/aster";
@@ -40,6 +43,7 @@ const date = grammar()
 
 type Grammar = typeof date;
 type DigitNode = Node<"digit", string>;
+const parseDate = toParser(date, "date");
 
 export type Assertions = [
   Expect<
@@ -99,6 +103,12 @@ export type Assertions = [
       ]
     >
   >,
+  /** a parser returns the rule's node. */
+  Expect<
+    Equal<ReturnType<typeof parseDate>, ParseResult<AstOf<Grammar, "date">>>
+  >,
+  /** a grammar whose shape is not known statically has unknown children. */
+  Expect<Equal<AstOf<AnyGrammar, string>, Node<string, unknown>>>,
 ];
 
 /**

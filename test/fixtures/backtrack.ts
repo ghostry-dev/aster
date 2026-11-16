@@ -1,13 +1,8 @@
 import { contains } from "#internal/CodePoints";
-import type { Mark, Program } from "#internal/NFA";
+import type { Program } from "#internal/NFA";
+import type { Event } from "#internal/VM";
 
-/**
- * A mark on the accepting path, with the UTF-16 offset where it was passed.
- */
-export interface Event {
-  readonly mark: Mark;
-  readonly offset: number;
-}
+export type { Event };
 
 interface Trace {
   readonly event: Event;

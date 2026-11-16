@@ -16,6 +16,7 @@ import {
 import type { Expr } from "@ghostry/aster/unstable-ir";
 import { attest, describe, expect, test } from ".";
 import { backtrack, marks, type Event } from "./fixtures/backtrack";
+import { nearMisses } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
 
 type Realistic = RuleNames<typeof realistic>;
@@ -35,30 +36,6 @@ const ACCEPTED: readonly (readonly [Realistic, string])[] = [
     "2026-11-15T09:30:00Z INFO 10.0.0.1 https://ex.com/x 1.2.3 -- ok",
   ],
 ];
-
-/**
- * Near misses: every single-character deletion, duplication, and adjacent swap
- * of an accepted input, plus a few replacements. These sit right at the
- * language boundary, which is where an NFA construction bug would show.
- */
-function nearMisses(input: string): string[] {
-  const variants = new Set<string>();
-  for (let index = 0; index < input.length; index += 1) {
-    const at = input.charAt(index);
-    variants.add(input.slice(0, index) + input.slice(index + 1));
-    variants.add(input.slice(0, index) + at + input.slice(index));
-    variants.add(
-      input.slice(0, index)
-        + input.charAt(index + 1)
-        + at
-        + input.slice(index + 2),
-    );
-    variants.add(`${input.slice(0, index)}x${input.slice(index + 1)}`);
-    variants.add(`${input.slice(0, index)}.${input.slice(index + 1)}`);
-  }
-  variants.delete(input);
-  return [...variants];
-}
 
 describe("membership agrees with the emitted regex", () => {
   const programs = new Map<Realistic, Program>();

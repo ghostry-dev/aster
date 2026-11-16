@@ -44,13 +44,22 @@ export {
 export { toPattern, toRegExp, type PatternOptions } from "./Emit";
 
 /**
+ * Compile a parser for a rule: `toParser(grammar, rule)(input)`. It accepts
+ * exactly the strings `toRegExp` accepts, returns the derivation JS regex
+ * backtracking would pick as a typed {@link Node} tree with spans, and runs in
+ * time linear in the input for every grammar. A non-matching input is a
+ * {@link ParseFailure} result, never an exception.
+ */
+export { toParser } from "./Parse";
+
+/**
  * `AsterError` is the base, and `instanceof AsterError` catches everything the
  * library throws. Each subclass's `name` is `"@ghostry/aster:<Class>"`.
  * `.define()` throws `DuplicateRuleError`, `UnknownReferenceError`,
  * `InvalidRangeError`, `InvalidRepetitionError`, `EmptyEitherError`,
  * `NullableRepetitionError`, and `InvalidExpressionError`, each naming the
- * rule. `toPattern`/`toRegExp` throw `UnknownRuleError`, plus any of those for
- * a grammar that arrived as data.
+ * rule. `toPattern`/`toRegExp`/`toParser` throw `UnknownRuleError`, plus any of
+ * those for a grammar that arrived as data.
  */
 export { AsterError } from "./Error";
 
@@ -65,7 +74,8 @@ export { AsterError } from "./Error";
  * `Ast`/`AstOf` infer the {@link Node} a rule produces, and `Children` what an
  * expression contributes to its enclosing rule's node, resolving references by
  * name. Inference runs only when one of them is used, never at each `.define()`
- * link.
+ * link. `Parser` is what `toParser` returns, and `ParseResult` what a parser
+ * returns: a `ParseSuccess` holding the root node or a `ParseFailure`.
  */
 export type {
   Ast,
@@ -78,6 +88,10 @@ export type {
   Literal,
   Node,
   Optional,
+  ParseFailure,
+  Parser,
+  ParseResult,
+  ParseSuccess,
   Range,
   Repeat,
   RuleDefinition,

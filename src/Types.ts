@@ -217,9 +217,18 @@ type BodyOf<
  * The children an expression contributes to the nearest enclosing named rule,
  * with references resolved against `$Rules`. Anonymous combinators produce no
  * node of their own; a reference produces the referenced rule's node.
+ *
+ * An expression typed as the whole {@link Expr} union, as a body built in a
+ * loop or a grammar that arrived as data is, has `unknown` children. Its shape
+ * is not known statically, and inferring through `Sequence<readonly Expr[]>`
+ * would never terminate.
  */
-export type Children<$Expr extends Expr, $Rules extends RuleDefinition> =
-  $Expr extends RuleRef<infer $Name>
+export type Children<
+  $Expr extends Expr,
+  $Rules extends RuleDefinition,
+> = Expr extends $Expr
+  ? unknown
+  : $Expr extends RuleRef<infer $Name>
     ? Node<$Name, Children<BodyOf<$Rules, $Name>, $Rules>>
     : $Expr extends Literal | Range
       ? string
@@ -274,3 +283,33 @@ export type AstOf<$Grammar extends Grammar, $Name extends RuleNames<$Grammar>> =
   $Grammar extends Grammar<infer $Rules>
     ? Node<$Name, Children<BodyOf<$Rules, $Name>, $Rules>>
     : never;
+
+/**
+ * A successful parse: the root rule's node.
+ */
+export interface ParseSuccess<$Node> {
+  readonly ok: true;
+  readonly node: $Node;
+}
+
+/**
+ * A failed parse. `offset` is where the last candidate derivation died: the
+ * start of the first code point nothing could consume, or the end of the input
+ * if derivations reached it but none was complete.
+ */
+export interface ParseFailure {
+  readonly ok: false;
+  readonly offset: number;
+}
+
+/**
+ * What a {@link Parser} returns. A failure is a value, not an exception: an
+ * input that does not match is an expected outcome, not an error.
+ */
+export type ParseResult<$Node> = ParseSuccess<$Node> | ParseFailure;
+
+/**
+ * A compiled parser for one rule. It accepts exactly the strings the rule's
+ * anchored regex accepts, and picks the derivation that regex would.
+ */
+export type Parser<$Node> = (input: string) => ParseResult<$Node>;
