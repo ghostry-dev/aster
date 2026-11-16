@@ -47,6 +47,24 @@ export namespace AsterError {
     }
   }
   /**
+   * Thrown by `toPattern()` or `toRegExp()` when the grammar has no rule by the
+   * name asked for. The types reject a literal unknown name; this covers names
+   * that only exist at runtime and grammars that arrived as data.
+   */
+  export class UnknownRuleError extends AsterError {
+    constructor(
+      /**
+       * The rule name asked for.
+       */
+      public readonly rule: string,
+    ) {
+      super();
+      this.name = "@ghostry/aster:UnknownRuleError";
+      this.message = `The grammar has no rule named "${rule}".`;
+    }
+  }
+
+  /**
    * Thrown by `.define()` when a rule body references a rule that is not
    * defined before it. The builder's typed vocabulary makes this impossible
    * through the API; it covers bodies assembled by hand, including a rule

@@ -1,6 +1,7 @@
 import { AsterError } from "./Error";
-import { subexpressions, type Kind } from "./IR";
-import type { Expr } from "./Types";
+import type { Kind } from "./IR";
+import type { Expr, RuleDefinition } from "./Types";
+import { codePoint, fold } from "./Walk";
 
 /**
  * Every kind, as an object rather than an array so that adding a kind to the
@@ -17,60 +18,58 @@ const KINDS: Readonly<Record<Kind, true>> = {
 };
 
 /**
- * One body node on the explicit walk stack, with the index of the next
- * subexpression to visit.
- */
-interface Frame {
-  readonly expr: Expr;
-  readonly subexpressions: readonly Expr[];
-  next: number;
-}
-
-/**
  * Validate one rule body at definition time and return whether it can match the
  * empty string. `nullable` holds the answer for every rule defined before this
  * one; because a body can only reference earlier rules, that is all the
  * information a reference needs, and the rules are checked in one forward pass
  * with no graph search.
  *
- * The body is walked post-order with an explicit stack, never by recursion, so
- * nesting depth is bounded by memory rather than the call stack. A node is
- * validated when first pushed, so the walk only ever descends into well-formed
- * nodes; its nullability is computed when popped, from its subexpressions'
- * results, which sit on top of the `results` stack in order.
+ * The body is walked with {@link fold}. A node is validated when first reached,
+ * so the walk only ever descends into well-formed nodes; its nullability is
+ * computed on the way back up, from its subexpressions' answers.
  */
 export function check(
   rule: string,
   body: Expr,
   nullable: ReadonlyMap<string, boolean>,
 ): boolean {
-  const frames: Frame[] = [open(rule, body, nullable)];
-  const results: boolean[] = [];
-
-  for (let top = frames.pop(); top !== undefined; top = frames.pop()) {
-    const next = top.subexpressions[top.next];
-    if (next !== undefined) {
-      top.next += 1;
-      frames.push(top, open(rule, next, nullable));
-      continue;
-    }
-    const count = top.subexpressions.length;
-    const own = results.splice(results.length - count, count);
-    results.push(close(rule, top.expr, own, nullable));
-  }
-
-  return results[0] === true;
+  return fold<boolean>(
+    body,
+    (expr) => validate(rule, expr, nullable),
+    (expr, own) => close(rule, expr, own, nullable),
+  );
 }
 
 /**
- * Validate a node's own fields and make its frame. Everything checked here is
- * local to the node, so the error can name the rule but needs no path.
+ * Check every rule from the first through `rules[last]` as `.define()` would
+ * have, in definition order. A grammar from `.compose()` always passes; this is
+ * for one that arrived as data, such as a JSON round trip or a hand-built
+ * object, before anything compiles it.
  */
-function open(
+export function checkThrough(
+  rules: readonly RuleDefinition[],
+  last: number,
+): void {
+  const nullable = new Map<string, boolean>();
+  for (let index = 0; index <= last; index += 1) {
+    const rule = rules[index];
+    if (rule === undefined) return;
+    if (nullable.has(rule.name)) {
+      throw new AsterError.DuplicateRuleError(rule.name);
+    }
+    nullable.set(rule.name, check(rule.name, rule.body, nullable));
+  }
+}
+
+/**
+ * Validate a node's own fields. Everything checked here is local to the node,
+ * so the error can name the rule but needs no path.
+ */
+function validate(
   rule: string,
   expr: Expr,
   nullable: ReadonlyMap<string, boolean>,
-): Frame {
+): void {
   const value: unknown = expr;
   if (
     typeof value !== "object"
@@ -128,8 +127,6 @@ function open(
     case "optional":
       break;
   }
-
-  return { expr, subexpressions: subexpressions(expr), next: 0 };
 }
 
 /**
@@ -160,15 +157,4 @@ function close(
       if (own[0] === true) throw new AsterError.NullableRepetitionError(rule);
       return expr.min === 0;
   }
-}
-
-/**
- * The code point of a string that is exactly one code point, else `undefined`.
- * A lone surrogate counts as one code point, as it does to a `v` flag regex.
- */
-function codePoint(value: unknown): number | undefined {
-  if (typeof value !== "string") return undefined;
-  const point = value.codePointAt(0);
-  if (point === undefined) return undefined;
-  return value.length === (point > 0xffff ? 2 : 1) ? point : undefined;
 }

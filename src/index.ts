@@ -36,8 +36,21 @@ export {
 } from "./Combinators";
 
 /**
- * `AsterError` is the base; `DuplicateRuleError` is a rule name defined twice
- * in one grammar.
+ * Lower a rule to a regex. `toPattern` returns the pattern source, written for
+ * the `v` flag and equally valid under `u`, so it can serve as a JSON Schema
+ * `pattern`; `toRegExp` compiles it with `v`. Both anchor to the whole input
+ * unless `anchored: false`, and neither emits a capturing group.
+ */
+export { toPattern, toRegExp, type PatternOptions } from "./Emit";
+
+/**
+ * `AsterError` is the base, and `instanceof AsterError` catches everything the
+ * library throws. Each subclass's `name` is `"@ghostry/aster:<Class>"`.
+ * `.define()` throws `DuplicateRuleError`, `UnknownReferenceError`,
+ * `InvalidRangeError`, `InvalidRepetitionError`, `EmptyEitherError`,
+ * `NullableRepetitionError`, and `InvalidExpressionError`, each naming the
+ * rule. `toPattern`/`toRegExp` throw `UnknownRuleError`, plus any of those for
+ * a grammar that arrived as data.
  */
 export { AsterError } from "./Error";
 

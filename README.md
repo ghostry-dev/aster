@@ -14,12 +14,20 @@ Define a grammar once. Use the regex where you need a fast yes or no in any engi
 </div>
 
 > [!WARNING]
-> Pre-release. So far there is grammar definition, definition-time validation, and AST type inference; the regex emitter and the parser are not built yet. Nothing is published.
+> Pre-release. So far there is grammar definition, definition-time validation, AST type inference, and the regex emitter; the parser is not built yet. Nothing is published.
 
 ## Example
 
 ```ts
-import { grammar, literal, range, sequence, type AstOf } from "@ghostry/aster";
+import {
+  grammar,
+  literal,
+  range,
+  sequence,
+  toPattern,
+  toRegExp,
+  type AstOf,
+} from "@ghostry/aster";
 
 const date = grammar()
   .define("digit", () => range("0", "9"))
@@ -28,9 +36,14 @@ const date = grammar()
   .define("date", ({ year, month }) => sequence([year, literal("-"), month]))
   .compose();
 
+toPattern(date, "date"); // "^[0-9][0-9][0-9][0-9]-[0-9][0-9]$"
+toRegExp(date, "date").test("2026-11"); // true
+
 type DateNode = AstOf<typeof date, "date">;
 // Node<"date", readonly [Node<"year", …>, string, Node<"month", …>]>
 ```
+
+Patterns are anchored by default, have no capturing groups, and are valid under both the `v` flag and the `u` flag, so they work as a JSON Schema `pattern`.
 
 Each builder receives only the rules defined before it, so every grammar is regular and always has a regex form. Nested formats (JSON, expressions) are out of scope for now.
 
