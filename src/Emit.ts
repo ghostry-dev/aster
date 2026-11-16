@@ -1,8 +1,9 @@
 import { checkThrough } from "./Check";
+import { codePoint, codePoints, merge, type CodePointSet } from "./CodePoints";
 import { AsterError } from "./Error";
 import { escapeInside, escapeOutside } from "./Escape";
 import type { Expr, Grammar, RuleNames } from "./Types";
-import { codePoint, fold } from "./Walk";
+import { fold } from "./Walk";
 
 /**
  * How tightly an emitted fragment binds, loosest last. A context that needs a
@@ -29,11 +30,6 @@ type Level =
   | typeof QUANTIFIED
   | typeof CONCAT
   | typeof ALTERNATION;
-
-/**
- * A disjoint, sorted set of inclusive code point ranges.
- */
-type CodePointSet = readonly (readonly [number, number])[];
 
 /**
  * An emitted expression. `set` is present when the expression matches exactly
@@ -153,7 +149,7 @@ function first(own: readonly Fragment[]): Fragment {
 }
 
 function literal(value: string): Fragment {
-  const points = [...value].map((character) => character.codePointAt(0) ?? 0);
+  const points = codePoints(value);
   const [only] = points;
   if (only === undefined) return NOTHING;
   if (points.length === 1) return characterClass([[only, only]]);
@@ -244,18 +240,4 @@ function characterClass(ranges: CodePointSet): Fragment {
     return `${escapeInside(from)}-${escapeInside(to)}`;
   });
   return { text: `[${members.join("")}]`, level: ATOM, set: merged };
-}
-
-function merge(ranges: CodePointSet): CodePointSet {
-  const sorted = [...ranges].sort((left, right) => left[0] - right[0]);
-  const merged: [number, number][] = [];
-  for (const [from, to] of sorted) {
-    const previous = merged[merged.length - 1];
-    if (previous !== undefined && from <= previous[1] + 1) {
-      previous[1] = Math.max(previous[1], to);
-    } else {
-      merged.push([from, to]);
-    }
-  }
-  return merged;
 }

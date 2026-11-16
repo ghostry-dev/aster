@@ -38,6 +38,12 @@
       "default": "./dist/esm/IR/index.js"
     }
   },
+  "imports": {
+    "#internal/*": {
+      "types": "./dist/types/*.d.ts",
+      "default": "./dist/esm/*.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true

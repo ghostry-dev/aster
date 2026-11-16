@@ -1,7 +1,8 @@
+import { codePoint } from "./CodePoints";
 import { AsterError } from "./Error";
 import type { Kind } from "./IR";
 import type { Expr, RuleDefinition } from "./Types";
-import { codePoint, fold } from "./Walk";
+import { fold } from "./Walk";
 
 /**
  * Every kind, as an object rather than an array so that adding a kind to the

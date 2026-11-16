@@ -50,15 +50,3 @@ export function fold<$Result>(
   const [result] = results;
   return result as $Result;
 }
-
-/**
- * The code point of a string that is exactly one code point, else `undefined`.
- * A lone surrogate counts as one code point, as it does to a `u` or `v` flag
- * regex.
- */
-export function codePoint(value: unknown): number | undefined {
-  if (typeof value !== "string") return undefined;
-  const point = value.codePointAt(0);
-  if (point === undefined) return undefined;
-  return value.length === (point > 0xffff ? 2 : 1) ? point : undefined;
-}
