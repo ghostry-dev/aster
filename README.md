@@ -14,7 +14,7 @@ Define a grammar once. Use the regex where you need a fast yes or no in any engi
 </div>
 
 > [!WARNING]
-> Pre-release. Only grammar definition and AST type inference exist so far; the regex emitter and the parser are not built yet. Nothing is published.
+> Pre-release. So far there is grammar definition, definition-time validation, and AST type inference; the regex emitter and the parser are not built yet. Nothing is published.
 
 ## Example
 
@@ -33,6 +33,8 @@ type DateNode = AstOf<typeof date, "date">;
 ```
 
 Each builder receives only the rules defined before it, so every grammar is regular and always has a regex form. Nested formats (JSON, expressions) are out of scope for now.
+
+`.define()` validates each rule as it is added: range endpoints, repetition bounds, references, and loops whose body could match the empty string are all rejected, with an error that names the rule.
 
 ## License
 

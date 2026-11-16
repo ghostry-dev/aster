@@ -31,6 +31,11 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.js",
       "default": "./dist/esm/index.js"
+    },
+    "./unstable-ir": {
+      "types": "./dist/types/IR/index.d.ts",
+      "import": "./dist/esm/IR/index.js",
+      "default": "./dist/esm/IR/index.js"
     }
   },
   "publishConfig": {

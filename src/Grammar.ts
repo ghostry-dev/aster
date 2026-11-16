@@ -1,3 +1,4 @@
+import { check } from "./Check";
 import { AsterError } from "./Error";
 import type {
   Expr,
@@ -16,20 +17,28 @@ import type {
  * never see each other's rules.
  */
 export function grammar(): GrammarBuilder {
-  return builder([]);
+  return builder([], new Map());
 }
 
+/**
+ * `nullable` maps every rule defined so far to whether it can match the empty
+ * string. It is what `check` needs to resolve a reference, and it is carried
+ * forward rather than recomputed because each rule only references earlier
+ * ones: definition order is already the order to analyze in.
+ */
 function builder<$Rules extends RuleDefinition>(
   rules: readonly RuleDefinition[],
+  nullable: ReadonlyMap<string, boolean>,
 ): GrammarBuilder<$Rules> {
   return {
     define(name, build) {
-      for (const rule of rules) {
-        if (rule.name === name) throw new AsterError.DuplicateRuleError(name);
-      }
+      if (nullable.has(name)) throw new AsterError.DuplicateRuleError(name);
       const body: Expr = build(references(rules) as Vocabulary<$Rules>);
       const definition: RuleDefinition = Object.freeze({ name, body });
-      return builder([...rules, definition]);
+      return builder(
+        [...rules, definition],
+        new Map(nullable).set(name, check(name, body, nullable)),
+      );
     },
     compose() {
       return Object.freeze({

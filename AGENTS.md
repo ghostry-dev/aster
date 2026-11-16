@@ -6,7 +6,7 @@ Context for working on this codebase across sessions. Not user-facing: this is h
 
 ## Mental model
 
-One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. Only the definition side exists so far: `grammar().define(…)…compose()` and the combinators. The IR subpath, regex emitter, NFA, parser, and ReDoS analysis come later, in the design doc's order.
+One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. So far there is the definition side (`grammar().define(…)…compose()` and the combinators), the introspection IR on `./unstable-ir`, and the definition-time checks. The regex emitter, NFA, parser, and ReDoS analysis come later, in the design doc's order.
 
 Grammars are **regular by construction**. A `.define()` builder receives references to the rules defined before it and nothing else, so the reference graph is a DAG and every grammar has a regex target. There is no `.recursive()`. Matching uses language semantics (membership in the set of strings, as in an anchored JS regex), never PEG's committed choice; see the design doc.
 
@@ -24,7 +24,23 @@ How this applies, now and in the steps ahead:
 - **Trace → AST fold.** The winning thread's trace is a linked list from newest to oldest. Iterate it into an array, then replay forward with an explicit stack of open nodes.
 - **Later `.recursive()`.** Earley and GLL are worklist algorithms already, so this rule still holds.
 
-The rule is about runtime code. Type-level inference (`Children` over nested combinator types) is a recursive conditional type by necessity; its cost is measured by the type budget below. Tests and scripts follow the rule too: `test/Platform.test.ts` walks `dist/` with a stack, and the frozen-data test walks a grammar with one. Once the NFA lands, a deep-nesting test (on the order of 10⁵ nested `optional`s) pins it.
+The rule is about runtime code. Type-level inference (`Children` over nested combinator types) is a recursive conditional type by necessity; its cost is measured by the type budget below. `subexpressions` (on `./unstable-ir`) is the primitive that keeps a walker a loop: push a node's direct children, never recurse into them. `Check.ts` is the reference walk. `Check.test.ts` defines bodies nested 10⁵ levels deep, far past any call stack, and every new walk over a body or an input gets a test of the same kind. Tests and scripts follow the rule too: `test/Platform.test.ts` walks `dist/` with a stack, and the frozen-data and IR tests walk grammars with one.
+
+## Definition-time checks
+
+`.define()` validates a body before adding the rule, so a grammar that composes is one every later stage can compile. Every check's error names the rule. Checks live in `Check.ts`, not in the combinators: a combinator does not know which rule it belongs to, and a body assembled by hand never passes through one.
+
+The walk is one post-order pass with an explicit stack. A node's own fields are checked when it is pushed, so the walk only descends into well-formed nodes:
+
+- a kind outside the closed union → `InvalidExpressionError`
+- a `range` endpoint that is not exactly one code point, or reversed endpoints → `InvalidRangeError`, with `reason` saying which. A lone surrogate counts as one code point, as it does under the `v` flag.
+- repetition bounds where `min` is not a non-negative safe integer, or `max` is present but not a safe integer ≥ 1 and ≥ `min` → `InvalidRepetitionError`
+- an `either` with no alternatives → `EmptyEitherError`
+- a reference to a name not defined earlier, including the rule itself → `UnknownReferenceError`. This is the runtime half of "regular by construction"; the typed vocabulary is the compile-time half.
+
+A node's nullability (whether it can match the empty string) is computed when it is popped, from its subexpressions' results. A repetition whose body is nullable throws `NullableRepetitionError`. JS regex has special rules for empty loop iterations, and the parser does not reproduce them, so the construction is rejected instead. `optional` of a nullable body is fine, because it is not a loop.
+
+A reference's nullability comes from a map of every earlier rule's answer, which the builder carries forward. Because a rule only references earlier rules, definition order is the analysis order: there is no fixpoint and no graph search. A rejected definition leaves the builder unchanged, since builders are immutable.
 
 ## Type accumulation
 
@@ -42,22 +58,26 @@ A lazy `interface … extends Node<…>` for reference nodes was also tried, as 
 | ----- | -------- | ----- | ------ | ------ | -------------------- |
 | chain | 2,377    | 7,477 | 20,477 | 63,352 | 0.08s                |
 | fan   | 1,614    | 4,899 | 13,374 | 41,574 | 0.06s                |
-| mixed | 2,270    | 7,280 | 20,130 | 62,705 | 0.08s                |
+| mixed | 2,287    | 7,327 | 20,227 | 62,902 | 0.08s                |
 
-Per-rule cost rises gently, from about 240 to about 630 instantiations, because each builder's vocabulary has as many keys as the grammar so far. That quadratic term is inherent to letting every builder see every earlier rule, and it is small: fitted to these numbers, 500 rules would land near 1.2M, still under TS5's 5,000,000 limit. `test/stress/Realistic.ts` (55 rules: RFC 3339, semver, IPv4, a URI subset, a log line) costs **23,389** instantiations. `test/TypeBudget.test.ts` fails above 50,000. Raise that budget deliberately, with a new measurement, never to make a red run green.
+Per-rule cost rises gently, from about 240 to about 630 instantiations, because each builder's vocabulary has as many keys as the grammar so far. That quadratic term is inherent to letting every builder see every earlier rule, and it is small: fitted to these numbers, 500 rules would land near 1.2M, still under TS5's 5,000,000 limit. `test/stress/Realistic.ts` (55 rules: RFC 3339, semver, IPv4, a URI subset, a log line) costs **23,356** instantiations. `test/TypeBudget.test.ts` fails above 50,000. Raise that budget deliberately, with a new measurement, never to make a red run green.
 
 ## Package layout
 
-One package at the repository root, like `@ghostry/harness`. The IR will be a subpath export (`./unstable-ir`) once it exists, not a sibling package. It moves to a stable path when the fabricator integration freezes it.
+One package at the repository root, like `@ghostry/harness`. The IR is the subpath export `./unstable-ir` (`src/IR/index.ts`), not a sibling package. It moves to a stable path when the fabricator integration freezes it, and until then any kind or field may change in any release.
 
-| module           | holds                                                                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `Types.ts`       | type-only: expression types, `RuleRef`, `RuleDefinition`, `Vocabulary`, `GrammarBuilder`, `Grammar`, `Node`, `Span`, and AST inference |
-| `Combinators.ts` | `literal`, `range`, `sequence`, `either`, `optional`, `zeroOrMore`, `oneOrMore`, each returning frozen plain data                      |
-| `Grammar.ts`     | `grammar()` and the immutable builder                                                                                                  |
-| `Error.ts`       | `AsterError` and its namespace of subclasses; dependency-free                                                                          |
+| module           | holds                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Types.ts`       | type-only: expression types, `RuleRef`, `RuleDefinition`, `Vocabulary`, `GrammarBuilder`, `Grammar`, `Node`, `Span`, and AST inference     |
+| `Combinators.ts` | `literal`, `range`, `sequence`, `either`, `optional`, `zeroOrMore`, `oneOrMore`, `repeat`, each returning frozen plain data; no validation |
+| `IR/index.ts`    | the `./unstable-ir` subpath: the IR's types, `Kind`, and `subexpressions`                                                                  |
+| `Check.ts`       | the definition-time checks and nullability, as one explicit-stack walk                                                                     |
+| `Grammar.ts`     | `grammar()` and the immutable builder, which carries each rule's nullability forward for `Check.ts`                                        |
+| `Error.ts`       | `AsterError` and its namespace of subclasses; dependency-free                                                                              |
 
-`Types.ts` is type-only. A value export there is a module-kind change, not a local addition. The expression types are exported so a consumer's inferred grammar types can be named in emitted declarations, but they are not yet a stable introspection contract.
+`Types.ts` is type-only. A value export there is a module-kind change, not a local addition. The package root also exports the expression types, because a consumer's inferred grammar types have to be nameable in its emitted declarations. The introspection contract, and its documentation, is `./unstable-ir`.
+
+Repetition is one `repeat` kind with `min` and an optional `max`. `zeroOrMore`, `oneOrMore`, and `repeat(body, { min, max })` all produce it, so a consumer handles every quantifier in one branch. An unbounded `max` is **omitted**, not `undefined`, so a node survives a JSON round trip unchanged (`IR.test.ts` uses `toStrictEqual`). `optional` stays its own kind, because its children (`A | undefined`) differ from a repetition's (`A[]`).
 
 Tests import via the package specifier `@ghostry/aster`, never a relative `../src/...` path. That resolves by self-reference through `exports` to the built `dist/`, so `bun test` always exercises the actual build, and so does `test/stress/Realistic.ts`.
 
@@ -73,9 +93,9 @@ Tests import via the package specifier `@ghostry/aster`, never a relative `../sr
 - `exactOptionalPropertyTypes` is on project-wide.
 - Comments: TypeDoc-style `/** */` only, explaining _why_ (a constraint, an invariant, a workaround), never restating _what_ the code already says.
 - **This file describes present-state facts and invariants, never change history.** The "rejected shapes" above are traps, not history: they say what fails if reintroduced.
-- Test files by concern. `Grammar.test.ts` covers runtime behavior. `Grammar.types.test.ts` holds compile-time assertions using `Equal`/`Expect`; `bun test` also executes that file, so its must-not-compile cases sit inside a function that never runs. `Platform.test.ts` asserts the build imports nothing from the host. `TypeBudget.test.ts` caps the stress grammar's instantiations.
+- Test files by concern. `Grammar.test.ts` covers the builder's runtime behavior, and `Check.test.ts` covers every definition-time check, including the deep-nesting cases. `IR.test.ts` covers the subpath (JSON round trip, `subexpressions`, definition order as topological order). `*.types.test.ts` files hold compile-time assertions using `Equal`/`Expect`: `Grammar.types.test.ts` for AST inference and the vocabulary, and `IR.types.test.ts` for the closed `kind` union, via an exhaustive `switch`. `bun test` also executes those files, so must-not-compile cases sit inside a function that never runs. `Platform.test.ts` asserts the build imports nothing from the host. It matches `import`/`export` statements, not a bare `from "…"`, because compiled code can put a variable named `from` before a string literal. `TypeBudget.test.ts` caps the stress grammar's instantiations.
 - **Errors.** Every error is a subclass of `AsterError`, declared in `Error.ts`'s namespace. Its `name` is the package and the class, `"@ghostry/aster:DuplicateRuleError"` (the base is `"@ghostry/aster:AsterError"`), the same convention every `@ghostry` package follows. A name identifies an error where `instanceof` cannot: across two installed copies of the package, or after serialization. Use `:`, not `/`, which would read as a subpath export. Context goes in `public readonly` constructor parameters, and the message must still make sense without them. A test for a new error asserts its `name`.
-- **Tests run on `@ghostry/harness`.** `test/index.ts` wraps `bun:test` with harness's `initialize` and exports `describe`/`expect`/`test` plus an annotated `attest`. Every test file imports from `"."`, never from `bun:test`. Use `attest` wherever a check should also narrow the type, rather than `!`, `?.`, or a cast: `attest.throws(Class, () => …)` instead of a `try`/`catch` with `caught as Error`, and `attest.definitely(value, "label")` instead of `?? ""` or `match?.[1]`. The binding must keep its explicit `Attest` annotation, because narrowing through a destructure is TS2775. To exercise a runtime check that the types already reject, put `// @ts-expect-error` on the call inside `attest.throws`, so the test pins the type rejection too. `@ghostry/harness` is a devDependency only; `Platform.test.ts` keeps it out of the build.
+- **Tests run on `@ghostry/harness`.** `test/index.ts` wraps `bun:test` with harness's `initialize` and exports `describe`/`expect`/`test` plus an annotated `attest`. Every test file imports from `"."`, never from `bun:test`. Use `attest` wherever a check should also narrow the type, rather than `!`, `?.`, or a cast: `attest.throws(Class, () => …)` instead of a `try`/`catch` with `caught as Error`, and `attest.definitely(value, "label")` instead of `?? ""` or `match?.[1]`. The binding must keep its explicit `Attest` annotation, because narrowing through a destructure is TS2775. To exercise a runtime check that the types already reject, put `// @ts-expect-error` on the call inside `attest.throws`, so the test pins the type rejection too. Harness's `.each` passes a table row as `row` on the test context, `({ row: [a, b] }) => …`, not as positional arguments the way `bun:test` does. Give each table an explicit tuple type so the destructured row is typed. `@ghostry/harness` is a devDependency only; `Platform.test.ts` keeps it out of the build.
 - **`jsr.json` uses `publish.include`, an allowlist**, for the reason harness's AGENTS.md gives: `jsr publish` does not skip dotfiles, so a denylist leaks repo files. Verify with `bun run check:jsr`.
 - Declaration emit does **not** go through Rslib (`dts: false`). `build:types` emits `dist/types` with the `typescript-5` devDependency; `build:verify` type-checks those `.d.ts` files with `skipLibCheck: false`.
 - `.stress/` is the benchmark's scratch output and is gitignored.

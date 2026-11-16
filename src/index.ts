@@ -20,9 +20,9 @@ export { grammar } from "./Grammar";
 /**
  * The combinators a rule body is built from. Each returns frozen plain data.
  * `literal` and `range` contribute the matched text; `sequence` a tuple;
- * `optional` a value or `undefined`; `zeroOrMore`/`oneOrMore` an array holding
- * every iteration; `either` the index of the alternative that matched beside
- * its value.
+ * `optional` a value or `undefined`; `zeroOrMore`/`oneOrMore`/`repeat` an array
+ * holding every iteration; `either` the index of the alternative that matched
+ * beside its value.
  */
 export {
   either,
@@ -30,6 +30,7 @@ export {
   oneOrMore,
   optional,
   range,
+  repeat,
   sequence,
   zeroOrMore,
 } from "./Combinators";

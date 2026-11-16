@@ -22,13 +22,22 @@ function walk(root: string): string[] {
 }
 
 /**
- * Every `from "…"` in the emitted output whose specifier is neither relative
- * nor a `#` subpath import — i.e. everything the package expects the host to
+ * Every module specifier in the emitted output that is neither relative nor a
+ * `#` subpath import — i.e. everything the package expects the host to
  * provide.
+ *
+ * Anchored to statements: `import … from "x"`, `export … from "x"`, `import
+ * "x"`, and `import("x")`. A bare `from "x"` match is not enough, because
+ * compiled code can put a variable named `from` right before a string literal.
  */
+const SPECIFIER =
+  /^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/gm;
+
 function externalImports(source: string): string[] {
-  return [...source.matchAll(/\bfrom\s*"([^"]+)"/g)]
-    .map((match) => attest.definitely(match[1], "import specifier"))
+  return [...source.matchAll(SPECIFIER)]
+    .map((match) =>
+      attest.definitely(match[1] ?? match[2] ?? match[3], "import specifier"),
+    )
     .filter(
       (specifier) => !specifier.startsWith(".") && !specifier.startsWith("#"),
     );

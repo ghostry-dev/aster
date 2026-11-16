@@ -53,13 +53,21 @@ export interface Optional<$Body extends Expr = Expr> {
 }
 
 /**
- * The body at least `min` times, greedily. Every iteration is kept in the
- * children, unlike a regex capture inside a loop.
+ * The body at least `min` and at most `max` times, greedily; no `max` means
+ * unbounded. Every iteration is kept in the children, unlike a regex capture
+ * inside a loop.
+ *
+ * One kind with bounds rather than a kind per quantifier, so `{m,n}` needs no
+ * new kind and a consumer handles every quantifier in one branch. `optional`
+ * stays its own kind, because its children (`A | undefined`) differ from a
+ * repetition's (`A[]`). An absent `max` is omitted rather than `undefined`, so
+ * the node survives a JSON round trip unchanged.
  */
-export interface Repeat<$Body extends Expr = Expr, $Min extends 0 | 1 = 0 | 1> {
+export interface Repeat<$Body extends Expr = Expr> {
   readonly kind: "repeat";
   readonly body: $Body;
-  readonly min: $Min;
+  readonly min: number;
+  readonly max?: number;
 }
 
 /**

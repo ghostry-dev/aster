@@ -68,7 +68,7 @@ export function optional<const $Body extends Expr>(
  */
 export function zeroOrMore<const $Body extends Expr>(
   body: $Body,
-): Repeat<$Body, 0> {
+): Repeat<$Body> {
   return Object.freeze({ kind: "repeat", body, min: 0 });
 }
 
@@ -77,6 +77,22 @@ export function zeroOrMore<const $Body extends Expr>(
  */
 export function oneOrMore<const $Body extends Expr>(
   body: $Body,
-): Repeat<$Body, 1> {
+): Repeat<$Body> {
   return Object.freeze({ kind: "repeat", body, min: 1 });
+}
+
+/**
+ * Match `body` from `min` to `max` times, greedily; leave out `max` for no
+ * upper bound. The bounds are checked when the rule is defined, not here, so
+ * every check names the rule it failed in.
+ */
+export function repeat<const $Body extends Expr>(
+  body: $Body,
+  bounds: { readonly min: number; readonly max?: number },
+): Repeat<$Body> {
+  return Object.freeze(
+    bounds.max === undefined
+      ? { kind: "repeat", body, min: bounds.min }
+      : { kind: "repeat", body, min: bounds.min, max: bounds.max },
+  );
 }

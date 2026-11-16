@@ -5,7 +5,7 @@ const ROOT = join(import.meta.dir, "..");
 
 /**
  * About twice what `test/stress/Realistic.ts` measured when the budget was set
- * (23,389 on TypeScript 5.9), so ordinary growth passes and a regression in how
+ * (23,356 on TypeScript 5.9), so ordinary growth passes and a regression in how
  * `.define()` accumulates, or in how AST types are inferred, fails. Raise it
  * deliberately, with the new measurement, never to make a red run go green.
  */
