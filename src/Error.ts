@@ -252,7 +252,13 @@ export namespace AsterError {
         + `${JSON.stringify(analysis.attack.suffix)}.${where} Parse untrusted `
         + `input with toParser(), which is linear for every grammar; or rewrite `
         + `the rule so no input matches it more than one way; or pass a `
-        + `higher \`allowedComplexity\` to initialize() to allow it.`;
+        + `higher \`allowedComplexity\` to initialize() to allow it.`
+        + (analysis.exact
+          ? ""
+          : ` The pattern was too large to analyze exactly within `
+            + `\`analysisBudget\`, so this ignores match priority and may `
+            + `report a pattern a real engine matches quickly; a larger `
+            + `budget gives an exact answer.`);
     }
   }
 
@@ -274,7 +280,7 @@ export namespace AsterError {
     ) {
       super();
       this.name = "@ghostry/aster:InvalidConfigError";
-      this.message = `initialize() does not accept ${JSON.stringify(value) ?? String(value)} for "${option}".`;
+      this.message = `initialize() does not accept ${typeof value === "number" ? String(value) : (JSON.stringify(value) ?? String(value))} for "${option}".`;
     }
   }
 

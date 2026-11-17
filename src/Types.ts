@@ -357,9 +357,8 @@ export interface PatternOptions {
 
 /**
  * An input that drives a pattern's worst case: `prefix`, then `pump` repeated,
- * then `suffix`. The suffix is a code point the pattern never accepts, so the
- * match fails and a backtracking engine tries every path; it is empty only when
- * the pattern accepts every code point somewhere.
+ * then `suffix`. The suffix makes every path through the pumped part fail, so a
+ * backtracking engine tries them all before giving up or finding a match.
  */
 export interface Attack {
   readonly prefix: string;
@@ -378,8 +377,13 @@ export interface Attack {
  *   work.
  *
  * `rule` is the innermost named rule containing the ambiguity, which is where
- * to rewrite. The analysis is conservative: it can report a pattern a real
- * engine always matches quickly, never the reverse.
+ * to rewrite. `exact` says whether the finding accounts for match priority: a
+ * search stops at its first match, so an ambiguity costs time only where every
+ * path through it fails. An exact finding is what a backtracking engine does.
+ * One that is not, because the pattern was too large to analyze exactly within
+ * `analysisBudget`, ignores priority: it never misses a slow pattern, but it
+ * can report one a real engine always matches quickly. A linear verdict is
+ * always exact.
  */
 export type Analysis =
   | { readonly complexity: "linear" }
@@ -388,11 +392,13 @@ export type Analysis =
       readonly degree: number;
       readonly rule: string;
       readonly attack: Attack;
+      readonly exact: boolean;
     }
   | {
       readonly complexity: "exponential";
       readonly rule: string;
       readonly attack: Attack;
+      readonly exact: boolean;
     };
 
 /**
@@ -416,6 +422,18 @@ export interface Config {
    * `analyze` reports either way, and the parser is linear for every grammar.
    */
   readonly allowedComplexity?: "linear" | "polynomial" | "exponential";
+
+  /**
+   * How many steps the analysis may take to account for match priority, after a
+   * priority-free pass finds a pattern superlinear. The exact pass can need
+   * exponentially many steps in the size of the pattern, as for
+   * `(?:a[ab]{20}a|a|b)*`, where what succeeds depends on which of the next 20
+   * characters are `a`. Past the budget the priority-free finding stands, with
+   * `exact: false`, which may over-report but never misses a slow pattern.
+   * Defaults to 1,000,000, about half a second when it runs out. `0` skips the
+   * exact pass, and `Infinity` never falls back.
+   */
+  readonly analysisBudget?: number;
 }
 
 /**

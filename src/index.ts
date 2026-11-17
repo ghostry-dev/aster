@@ -42,7 +42,8 @@ export {
  * a pattern a backtracking engine can take superlinear time on.
  * `allowedComplexity` raises that limit to polynomial patterns, or to
  * exponential ones, which turns it off; `analyze` reports either way, with an
- * attack string, and the parser is linear for every grammar.
+ * attack string, and the parser is linear for every grammar. The analysis is
+ * exact, accounting for match priority, within `analysisBudget` steps.
  *
  * Patterns are anchored unless `anchored: false`, written for the `v` flag and
  * valid with the same meaning under `u` (so they serve as a JSON Schema

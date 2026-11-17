@@ -55,6 +55,55 @@ const shapes = grammar()
   .define("word", () => oneOrMore(range("a", "z")))
   .define("words", ({ word }) => zeroOrMore(either(word, literal(" "))))
   .define("line", ({ words }) => sequence([literal(">"), words]))
+  /**
+   * Exponential work before an empty match: the optional body is tried first,
+   * so even a search, which succeeds with the empty match, pays for it.
+   */
+  .define("early", () => optional(sequence([oneOrMore(oneOrMore(a)), b])))
+  /**
+   * The same behind a `>`. From the `>`, the engine succeeds, by the empty
+   * match, but only after the exponential work: a branch that succeeds is still
+   * explored up to its success.
+   */
+  .define("prefixed", () =>
+    sequence([literal(">"), optional(sequence([oneOrMore(oneOrMore(a)), b]))]),
+  )
+  /**
+   * Safe only as a search: wherever the slow branch could start, the first
+   * branch matches first. Anchored, the first branch fails at the end and the
+   * engine falls through to the slow one.
+   */
+  .define("guarded", () =>
+    either(a, sequence([zeroOrMore(either(a, literal("aa"))), b])),
+  )
+  /**
+   * As a search on `aⁿ(ba)ⁿ`, every offset before the first `b` runs the
+   * failing first branch in full, quadratic in the `(ba)` loops, before the
+   * search moves on and matches the `b`: cubic, though the search loop itself
+   * succeeds. Every input that makes the search loop fail lacks a `b`, so the
+   * degree is only visible through a loop that succeeds.
+   */
+  .define("retried", () =>
+    either(
+      sequence([
+        zeroOrMore(a),
+        zeroOrMore(literal("ba")),
+        zeroOrMore(literal("ba")),
+        literal("c"),
+      ]),
+      b,
+    ),
+  )
+  /**
+   * Accepts every code point, so no single character makes it fail: the
+   * attack's suffix has to come from the look-ahead.
+   */
+  .define("anything", () =>
+    sequence([
+      zeroOrMore(either(a, literal("aa"))),
+      range("\u0000", "\u{10FFFF}"),
+    ]),
+  )
   .compose();
 
 type Shape = RuleNames<typeof shapes>;
@@ -91,6 +140,10 @@ describe("verdicts", () => {
     ["emptyAlternatives", "exponential", 0, "emptyAlternatives"],
     /** The finding names the innermost rule holding the ambiguity. */
     ["line", "exponential", 0, "words"],
+    ["early", "exponential", 0, "early"],
+    ["prefixed", "exponential", 0, "prefixed"],
+    ["guarded", "exponential", 0, "guarded"],
+    ["anything", "exponential", 0, "anything"],
   ];
 
   test.each(cases)("%s is %s", ({ row: [rule, complexity, degree, where] }) => {
@@ -101,12 +154,38 @@ describe("verdicts", () => {
     if (found.complexity === "polynomial") expect(found.degree).toBe(degree);
   });
 
-  test("a search adds a degree: `a*b` is quadratic unanchored", () => {
-    expect(analyze(shapes, "anchoredTail", { anchored: false })).toMatchObject({
-      complexity: "polynomial",
-      degree: 2,
-    });
-  });
+  /**
+   * A search stops at its first match, so an ambiguity only costs time where
+   * every path through it fails. A search also retries at every offset, which
+   * adds a degree where nothing matches: `a*b` is linear anchored and quadratic
+   * as a search.
+   */
+  const searches: readonly (readonly [
+    Shape,
+    Analysis["complexity"],
+    number,
+  ])[] = [
+    ["letters", "linear", 0],
+    ["twoLoops", "linear", 0],
+    ["nested", "linear", 0],
+    ["guarded", "linear", 0],
+    ["anything", "linear", 0],
+    ["anchoredTail", "polynomial", 2],
+    ["early", "exponential", 0],
+    ["prefixed", "exponential", 0],
+    ["retried", "polynomial", 3],
+  ];
+
+  test.each(searches)(
+    "as a search, %s is %s",
+    ({ row: [rule, complexity, degree] }) => {
+      const found = analyze(shapes, rule, { anchored: false });
+      expect(found.complexity).toBe(complexity);
+      if (found.complexity === "linear") return;
+      expect(found.exact).toBe(true);
+      if (found.complexity === "polynomial") expect(found.degree).toBe(degree);
+    },
+  );
 
   test("every rule of the realistic grammar is linear", () => {
     const slow = realistic.rules
@@ -149,24 +228,46 @@ describe("attacks", () => {
     return found.attack;
   };
 
-  test.each(["nested", "overlapping", "emptyAlternatives", "line"] as const)(
-    "%s is exponential in the engine",
-    ({ row: rule }) => {
-      const attack = vulnerable(rule);
-      const regex = toRegExp(shapes, rule);
-      expect(slowsAt(regex, attack, (n) => n + 1, 60)).toBeDefined();
-      const parse = toParser(shapes, rule);
-      const started = performance.now();
-      parse(attack.prefix + attack.pump.repeat(10_000) + attack.suffix);
-      expect(performance.now() - started).toBeLessThan(1_000);
-    },
-  );
+  test.each([
+    "nested",
+    "overlapping",
+    "emptyAlternatives",
+    "line",
+    "early",
+    "anything",
+  ] as const)("%s is exponential in the engine", ({ row: rule }) => {
+    const attack = vulnerable(rule);
+    const regex = toRegExp(shapes, rule);
+    expect(slowsAt(regex, attack, (n) => n + 1, 60)).toBeDefined();
+    const parse = toParser(shapes, rule);
+    const started = performance.now();
+    parse(attack.prefix + attack.pump.repeat(10_000) + attack.suffix);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
 
   test("twoLoops is superlinear in the engine", () => {
     const attack = vulnerable("twoLoops");
     expect(
       slowsAt(toRegExp(shapes, "twoLoops"), attack, (n) => n * 2, 1 << 20),
     ).toBeDefined();
+  });
+
+  test("as a search, early is exponential in the engine", () => {
+    const attack = vulnerable("early", false);
+    const regex = toRegExp(shapes, "early", { anchored: false });
+    expect(slowsAt(regex, attack, (n) => n + 1, 60)).toBeDefined();
+  });
+
+  test("as a search, retried is superlinear in the engine", () => {
+    const attack = vulnerable("retried", false);
+    const regex = toRegExp(shapes, "retried", { anchored: false });
+    expect(slowsAt(regex, attack, (n) => n * 2, 1 << 20)).toBeDefined();
+  });
+
+  test("as a search, anchoredTail is superlinear in the engine", () => {
+    const attack = vulnerable("anchoredTail", false);
+    const regex = toRegExp(shapes, "anchoredTail", { anchored: false });
+    expect(slowsAt(regex, attack, (n) => n * 2, 1 << 20)).toBeDefined();
   });
 
   test("a linear pattern does not slow on the same input", () => {
@@ -179,15 +280,10 @@ describe("attacks", () => {
 
 /**
  * recheck is an independent ReDoS checker, with an automaton-based mode that
- * models match priority. The analysis ignores priority, so it is sound but not
- * exact: it must never call a pattern less severe than recheck does.
- *
- * Anchored, the two agree on every case here. As a search they need not: an
- * unanchored `[a-z]+` stops at its first match, which only priority reveals, so
- * the analysis reports the search loop's extra degree where recheck sees a
- * linear pattern. That over-report is the price of soundness without
- * priorities, since a pattern can also do exponential work before an early
- * match (`(?:(?:a|a)*b)?`).
+ * models match priority the way the analysis does, so the two must agree
+ * exactly, anchored and as a search. As a search the priority-free fallback
+ * disagrees: an unanchored `[a-z]+` stops at its first match, and only priority
+ * shows it, so the fallback reports the search loop's extra degree.
  *
  * recheck takes seconds on patterns of several hundred characters, so the
  * realistic grammar is compared on its shorter rules.
@@ -200,13 +296,19 @@ describe("agreement with recheck", () => {
    * `[ours, recheck's]` as severity and degree, or `undefined` if recheck gave
    * no answer.
    */
-  const compare = (grammar: Grammar, rule: string, anchored: boolean) => {
-    const mine: Analysis = analyze(grammar, rule, { anchored });
+  const compare = (
+    grammar: Grammar,
+    rule: string,
+    anchored: boolean,
+    instance = initialize({ allowedComplexity: "exponential" }),
+  ) => {
+    const mine: Analysis = instance.analyze(grammar, rule, { anchored });
     const pattern = toPattern(grammar, rule, { anchored });
     const theirs = checkSync(pattern, "u", { checker: "automaton" });
     if (theirs.status === "unknown") return undefined;
     return {
       rule,
+      anchored,
       ours: [
         severity(mine.complexity),
         mine.complexity === "polynomial" ? mine.degree : 0,
@@ -217,37 +319,42 @@ describe("agreement with recheck", () => {
       ],
     };
   };
+  const differs = (result: ReturnType<typeof compare>): boolean =>
+    result !== undefined
+    && JSON.stringify(result.ours) !== JSON.stringify(result.theirs);
   const unsound = (result: ReturnType<typeof compare>): boolean =>
     result !== undefined
     && (result.ours[0] ?? 0) * 100 + (result.ours[1] ?? 0)
       < (result.theirs[0] ?? 0) * 100 + (result.theirs[1] ?? 0);
 
-  test("anchored, every shape agrees exactly", () => {
-    const results = shapes.rules.map(({ name }) => compare(shapes, name, true));
-    expect(
-      results.filter(
-        (result) =>
-          result !== undefined
-          && JSON.stringify(result.ours) !== JSON.stringify(result.theirs),
-      ),
-    ).toEqual([]);
+  test.each([true, false])("anchored: %p, every shape agrees", ({ row }) => {
+    const results = shapes.rules.map(({ name }) => compare(shapes, name, row));
+    expect(results.filter(differs)).toEqual([]);
   });
 
-  test("as a search, every shape is at least as severe", () => {
-    const results = shapes.rules.map(({ name }) =>
-      compare(shapes, name, false),
-    );
-    expect(results.filter(unsound)).toEqual([]);
-  });
-
-  test("on the realistic grammar's shorter rules", () => {
+  test("the realistic grammar's shorter rules agree, anchored and as searches", () => {
     const results = realistic.rules
       .filter(({ name }) => toPattern(realistic, name).length < 200)
-      .map(({ name }) => compare(realistic, name, true));
-    expect(results.filter(unsound)).toEqual([]);
+      .flatMap(({ name }) => [
+        compare(realistic, name, true),
+        compare(realistic, name, false),
+      ]);
+    expect(results.filter(differs)).toEqual([]);
     expect(
       results.filter((result) => result !== undefined).length,
-    ).toBeGreaterThan(40);
+    ).toBeGreaterThan(80);
+  });
+
+  test("without the exact pass, a search is at least as severe", () => {
+    const sound = initialize({
+      allowedComplexity: "exponential",
+      analysisBudget: 0,
+    });
+    const results = shapes.rules.map(({ name }) =>
+      compare(shapes, name, false, sound),
+    );
+    expect(results.filter(unsound)).toEqual([]);
+    expect(results.filter(differs).length).toBeGreaterThan(0);
   });
 });
 
@@ -319,6 +426,79 @@ describe("allowedComplexity", () => {
       "sometimes",
     ]);
   });
+});
+
+/**
+ * `(?:a[ab]{n}a|a|b)*`: whether a state inside the counter succeeds depends on
+ * which of the next `n` characters are `a`, so the look-ahead needs about 2ⁿ
+ * states. Exact for `n = 10` takes about 10⁵ steps.
+ */
+const blowup = (n: number) =>
+  grammar()
+    .define("blowup", () =>
+      zeroOrMore(
+        either(
+          sequence([a, repeat(either(a, b), { min: n, max: n }), a]),
+          a,
+          b,
+        ),
+      ),
+    )
+    .compose();
+
+describe("analysisBudget", () => {
+  test("past the default budget, the priority-free finding stands, quickly", () => {
+    const started = performance.now();
+    const found = analyze(blowup(16), "blowup");
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(found).toMatchObject({ complexity: "exponential", exact: false });
+    const error = attest.throws(AsterError.VulnerablePatternError, () =>
+      initialize().toPattern(blowup(16), "blowup"),
+    );
+    expect(error.analysis.exact).toBe(false);
+    expect(error.message).toContain("analysisBudget");
+  });
+
+  test("a larger budget makes the same finding exact", () => {
+    const grammar = blowup(10);
+    const small = initialize({ analysisBudget: 50_000 });
+    const large = initialize({ analysisBudget: 200_000 });
+    expect(small.analyze(grammar, "blowup")).toMatchObject({ exact: false });
+    expect(large.analyze(grammar, "blowup")).toMatchObject({ exact: true });
+    expect(
+      initialize({ analysisBudget: Infinity }).analyze(grammar, "blowup"),
+    ).toMatchObject({ exact: true });
+  });
+
+  test("an exact finding's message does not mention the budget", () => {
+    const error = attest.throws(AsterError.VulnerablePatternError, () =>
+      initialize().toPattern(shapes, "nested"),
+    );
+    expect(error.analysis.exact).toBe(true);
+    expect(error.message).not.toContain("analysisBudget");
+  });
+
+  test("0 skips the exact pass", () => {
+    const sound = initialize({ analysisBudget: 0 });
+    expect(sound.analyze(shapes, "letters", { anchored: false })).toMatchObject(
+      { complexity: "polynomial", degree: 2, exact: false },
+    );
+    expect(analyze(shapes, "letters", { anchored: false }).complexity).toBe(
+      "linear",
+    );
+  });
+
+  test.each([-1, 1.5, Number.NaN, -Infinity, "10"] as const)(
+    "%p throws rather than falling back",
+    ({ row }) => {
+      const error = attest.throws(AsterError.InvalidConfigError, () =>
+        // @ts-expect-error a string is not a budget
+        initialize({ analysisBudget: row }),
+      );
+      expect(error.option).toBe("analysisBudget");
+      expect(error.value).toBe(row);
+    },
+  );
 });
 
 describe("caching", () => {

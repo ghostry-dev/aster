@@ -193,17 +193,15 @@ test(
 );
 
 /**
- * The ReDoS analysis is sound: on random grammars, anchored and as a search, it
- * never calls a pattern less severe than recheck's automaton checker does.
- * Anchored, it must also agree exactly. It did on all 5,005 random patterns
- * measured, so a difference is either an over-report the analysis should not
- * make or a change in recheck, and both are worth a look. As a search it may
- * report more, since it ignores match priority (see `Analyze.test.ts`). recheck
- * is slower than everything else here, so this covers a third of the seeds, and
- * skips a pattern recheck cannot decide.
+ * The ReDoS analysis is exact: on random grammars, anchored and as a search, it
+ * agrees with recheck's automaton checker, which models match priority the same
+ * way. A finding that fell back to the priority-free analysis, past the budget,
+ * only has to be at least as severe. recheck is slower than everything else
+ * here, so this covers a third of the seeds, and skips a pattern recheck cannot
+ * decide.
  */
 test(
-  `the analysis is never less severe than recheck on ${Math.ceil(RUNS / 3)} random grammars`,
+  `the analysis agrees with recheck on ${Math.ceil(RUNS / 3)} random grammars`,
   () => {
     const rank = (complexity: string, degree: number): number =>
       complexity === "exponential"
@@ -211,11 +209,11 @@ test(
         : complexity === "polynomial"
           ? degree
           : 0;
-    const unsound: unknown[] = [];
+    const different: unknown[] = [];
     let decided = 0;
     for (
       let run = 0;
-      run < Math.ceil(RUNS / 3) && unsound.length < 5;
+      run < Math.ceil(RUNS / 3) && different.length < 5;
       run += 1
     ) {
       const seed = SEED + run;
@@ -237,17 +235,19 @@ test(
               ? theirs.complexity.degree
               : 1,
           );
-          if (mine < reference || (anchored && mine !== reference))
-            unsound.push({
+          const exact = ours.complexity === "linear" || ours.exact;
+          if (exact ? mine !== reference : mine < reference)
+            different.push({
               seed,
               rule,
+              anchored,
               pattern,
               ours,
               theirs: theirs.complexity,
             });
         }
     }
-    expect(unsound).toEqual([]);
+    expect(different).toEqual([]);
     expect(decided).toBeGreaterThan(0);
   },
   Math.max(60_000, RUNS * 300),

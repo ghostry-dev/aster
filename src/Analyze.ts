@@ -1,4 +1,4 @@
-import { intersect, merge, type CodePointSet } from "./CodePoints";
+import { contains, intersect, merge, type CodePointSet } from "./CodePoints";
 import type { Regex } from "./Emit";
 import type { Analysis, Attack } from "./Types";
 
@@ -17,12 +17,15 @@ import type { Analysis, Attack } from "./Types";
  *   q`, and `q → q` on the same word. A chain of `k` such links gives `nᵏ`
  *   paths, and the engine runs in `nᵏ⁺¹`.
  *
- * The analysis is **sound and conservative**. It ignores match priority and the
- * possibility that a higher-priority path succeeds first, so it never misses a
- * vulnerable pattern but may flag one that a real engine always matches
- * quickly. It reads the structure the emitter wrote (`Regex`), after class
- * collapsing, since that is what the engine runs: `[a-c]|[b-d]` in a loop is
- * ambiguous, `[a-d]` is not.
+ * A match that succeeds stops at its first accepting path, so priority decides
+ * which ambiguities cost time. The analysis runs in two passes. The first
+ * ignores priority, treating every path as failing: it never misses a slow
+ * pattern, and if it finds none, the pattern is linear. Otherwise the second
+ * pass accounts for priority with a look-ahead, which makes the answer exact
+ * for a backtracking engine, within a budget of steps; past it, the first
+ * pass's finding stands, marked inexact. It reads the structure the emitter
+ * wrote (`Regex`), after class collapsing, since that is what the engine runs:
+ * `[a-c]|[b-d]` in a loop is ambiguous, `[a-d]` is not.
  *
  * Every walk is a loop over an explicit worklist, like every other walk here.
  *
@@ -41,8 +44,8 @@ interface Rules {
 }
 
 /**
- * A Thompson ε-NFA state. `split` may have any number of targets: their order
- * is a priority the analysis does not use.
+ * A Thompson ε-NFA state. `split` may have any number of targets, in priority
+ * order: the engine tries the first one first.
  */
 type State =
   | {
@@ -82,6 +85,8 @@ interface Fragment {
 class Automaton {
   readonly #closures = new Map<number, ReadonlyMap<number, number>>();
   readonly #scopes = new Map<number, ReadonlyMap<number, Rules | null>>();
+  readonly #ordered = new Map<number, readonly number[]>();
+  #accept: number | undefined;
   #reverse: readonly (readonly number[])[] | undefined;
 
   constructor(
@@ -119,6 +124,48 @@ class Automaton {
 
   isChar(at: number): boolean {
     return this.states[at]?.op === "char";
+  }
+
+  /**
+   * The `accept` state. There is exactly one, pushed after the pattern.
+   */
+  get accept(): number {
+    if (this.#accept === undefined) {
+      const at = this.states.findIndex((state) => state.op === "accept");
+      if (at === -1) throw new Error("an automaton with no accept state");
+      this.#accept = at;
+    }
+    return this.#accept;
+  }
+
+  /**
+   * The `char` and `accept` states the ε-region from `from` reaches, in the
+   * order a backtracking engine first reaches them: a depth-first walk taking
+   * each split's targets in priority order. Skipping a state already visited
+   * keeps that order, because the first visit explored everything after it.
+   */
+  ordered(from: number): readonly number[] {
+    const known = this.#ordered.get(from);
+    if (known !== undefined) return known;
+    const out: number[] = [];
+    const seen = new Set<number>();
+    const stack = [from];
+    for (let at = stack.pop(); at !== undefined; at = stack.pop()) {
+      if (seen.has(at)) continue;
+      seen.add(at);
+      const op = this.states[at]?.op;
+      if (op === "char" || op === "accept") {
+        out.push(at);
+        continue;
+      }
+      const targets = this.edges(at);
+      for (let index = targets.length - 1; index >= 0; index -= 1) {
+        const target = targets[index];
+        if (target !== undefined && !seen.has(target)) stack.push(target);
+      }
+    }
+    this.#ordered.set(from, out);
+    return out;
   }
 
   set(at: number): CodePointSet {
@@ -226,13 +273,46 @@ class Automaton {
  * encloses it. An unanchored pattern is searched for at every start offset,
  * which the analysis models as a leading `[^]*?`: that is why `a*b` is
  * quadratic as a search and linear when anchored.
+ *
+ * The sound search runs first, on the automaton alone. Only a superlinear
+ * finding is refined by the exact search, which can lower its severity but
+ * never raise it, within `budget` steps. Past the budget the sound finding
+ * stands, marked inexact.
  */
 export function analyze(
   regex: Regex,
   root: string,
   anchored: boolean,
+  budget: number,
 ): Analysis {
   const automaton = new Automaton(...thompson(regex, anchored));
+  const sound = soundly(automaton, root);
+  if (sound.complexity === "linear" || budget <= 0) return sound;
+  try {
+    return exactly(automaton, root, anchored, new Budget(budget));
+  } catch (error) {
+    if (error instanceof OverBudget) return sound;
+    throw error;
+  }
+}
+
+/**
+ * The priority-free analysis: every path is assumed to fail, so every ambiguity
+ * counts. Components and loops are found on the ε-NFA, which is linear in the
+ * pattern, and ε-closures are computed only for the states a product search
+ * touches, so a pattern with no loops never computes one.
+ */
+function soundly(automaton: Automaton, root: string): Analysis {
+  const space: Space = {
+    automaton,
+    looks: 1,
+    moves: (_, set) => [{ char: representative(set), look: 0 }],
+    next: (state) => automaton.successors(state),
+    edges: (at) => automaton.edges(at),
+    reverse: (at) => automaton.reverse(at),
+    isChar: (at) => automaton.isChar(at),
+    spend: () => undefined,
+  };
   const { order, component } = components(automaton.states.keys(), (at) =>
     automaton.edges(at),
   );
@@ -245,31 +325,473 @@ export function analyze(
   const loops = order.map((members) =>
     members.length > 1 ? members.filter((at) => automaton.isChar(at)) : [],
   );
+  return report(
+    find(space, order, loops, component),
+    automaton,
+    root,
+    false,
+    (pump) => attack(automaton, pump.at, pump.pump),
+  );
+}
+
+/**
+ * The priority-aware analysis. A backtracking attempt succeeds at the first
+ * path that reaches `accept` and fails only after trying every path. The
+ * look-ahead says, for the input remaining at any point, which states would
+ * succeed on it. The search runs on pairs of a state and a look-ahead, over the
+ * steps the engine actually takes:
+ *
+ * - From a state that would succeed, the engine tries its successors in priority
+ *   order up to and including the first that succeeds, and never reaches the
+ *   rest. It reaches that successor by its first ε-path only, so the others do
+ *   not count. The states that would succeed therefore form a single path for a
+ *   given input, which can carry no ambiguity of its own but can start a
+ *   polynomial link: a search retrying offsets before a match further on runs
+ *   every failing attempt in full.
+ * - Everything a failing state reaches on the same input fails too, so from a
+ *   failing state the engine takes every step, along every ε-path, as the sound
+ *   analysis assumes.
+ *
+ * Every copy in a product search shares one look-ahead, since all copies read
+ * one input.
+ */
+function exactly(
+  automaton: Automaton,
+  root: string,
+  anchored: boolean,
+  budget: Budget,
+): Analysis {
+  const lookahead = new Lookahead(automaton, anchored, budget);
+  const looks = lookahead.size;
+  if (automaton.states.length * looks > Number.MAX_SAFE_INTEGER)
+    throw new OverBudget();
+  const node = (state: number, look: number): number => state * looks + look;
+  const accept = automaton.accept;
 
   /**
-   * Report the loop nearest the start first: Tarjan emits components in reverse
-   * topological order.
+   * The targets of an ordered closure the engine tries when the remaining input
+   * has look-ahead `look`: all of them up to and including the first that
+   * succeeds. `accept` succeeds where the look-ahead contains it, and otherwise
+   * (anchored, before the end) is a dead end the engine backs out of.
+   */
+  const tried = (
+    targets: readonly number[],
+    look: number,
+  ): { readonly targets: number[]; readonly succeeds: boolean } => {
+    const out: number[] = [];
+    for (const target of targets) {
+      const succeeds = lookahead.succeeds(look, target);
+      if (target === accept) {
+        if (succeeds) return { targets: out, succeeds };
+        continue;
+      }
+      out.push(target);
+      if (succeeds) return { targets: out, succeeds };
+    }
+    return { targets: out, succeeds: false };
+  };
+
+  /**
+   * The steps out of `state` into look-ahead `after`, with how many ε-paths the
+   * engine takes to each: every one from a failing state, the first from one
+   * that succeeds.
+   */
+  const steps = new Map<number, ReadonlyMap<number, number>>();
+  const next = (state: number, after: number): ReadonlyMap<number, number> => {
+    const key = node(state, after);
+    const known = steps.get(key);
+    if (known !== undefined) return known;
+    const { targets, succeeds } = tried(
+      automaton.ordered(automaton.edges(state)[0] ?? state),
+      after,
+    );
+    const out = succeeds
+      ? new Map(targets.map((target) => [target, 1]))
+      : automaton.successors(state);
+    steps.set(key, out);
+    return out;
+  };
+
+  /**
+   * Reachable pairs, breadth first from every way the input can begin, with the
+   * step that first reached each, for the attack's prefix, and their edges.
+   */
+  const parent = new Map<
+    number,
+    { readonly from: number; readonly char: number } | null
+  >();
+  const edges = new Map<number, number[]>();
+  const queue: number[] = [];
+  const entry = automaton.ordered(automaton.start);
+  for (let look = 0; look < looks; look += 1)
+    for (const target of tried(entry, look).targets) {
+      const at = node(target, look);
+      if (parent.has(at)) continue;
+      budget.spend();
+      parent.set(at, null);
+      queue.push(at);
+    }
+  for (let index = 0; index < queue.length; index += 1) {
+    const at = queue[index] ?? 0;
+    const state = Math.floor(at / looks);
+    const look = at % looks;
+    const out: number[] = [];
+    for (const move of lookahead.moves(look, automaton.set(state)))
+      for (const target of next(state, move.look).keys()) {
+        budget.spend();
+        const to = node(target, move.look);
+        if (!out.includes(to)) out.push(to);
+        if (parent.has(to)) continue;
+        parent.set(to, { from: at, char: move.char });
+        queue.push(to);
+      }
+    edges.set(at, out);
+  }
+
+  const reverse = new Map<number, number[]>();
+  for (const [from, targets] of edges)
+    for (const to of targets) {
+      const list = reverse.get(to);
+      if (list === undefined) reverse.set(to, [from]);
+      else list.push(from);
+    }
+  const space: Space = {
+    automaton,
+    looks,
+    moves: (look, set) => lookahead.moves(look, set),
+    next,
+    edges: (at) => edges.get(at) ?? [],
+    reverse: (at) => reverse.get(at) ?? [],
+    isChar: () => true,
+    spend: () => budget.spend(),
+  };
+  const { order, component } = components(edges.keys(), space.edges);
+  const loops = order.map((members) => {
+    const [only] = members;
+    return members.length > 1
+      || (only !== undefined && space.edges(only).includes(only))
+      ? members
+      : [];
+  });
+  return report(
+    find(space, order, loops, component),
+    automaton,
+    root,
+    true,
+    (pump) => {
+      const chars: number[] = [];
+      for (
+        let step = parent.get(pump.at);
+        step !== undefined && step !== null;
+        step = parent.get(step.from)
+      )
+        chars.push(step.char);
+      return {
+        prefix: String.fromCodePoint(...chars.reverse()),
+        pump: pump.pump,
+        suffix: lookahead.suffix(pump.at % looks),
+      };
+    },
+  );
+}
+
+/**
+ * The graph an ambiguity search runs on. A node is a state and a look-ahead,
+ * `state * looks + look`. The sound search has one look-ahead, in which nothing
+ * succeeds, so its nodes are the automaton's states and its graph the ε-NFA.
+ */
+interface Space {
+  readonly automaton: Automaton;
+  readonly looks: number;
+  /**
+   * The steps on a code point from `set` out of look-ahead `look`: the
+   * look-ahead of the input after it, with a code point that leads there.
+   */
+  moves(look: number, set: CodePointSet): readonly Move[];
+  /**
+   * The states the engine steps to from `state` when the input after the step
+   * has look-ahead `after`, with how many ε-paths it takes to each, up to 2.
+   */
+  next(state: number, after: number): ReadonlyMap<number, number>;
+  /**
+   * The graph that components, loops, and reachability between loops are found
+   * on, and whether a node consumes a code point.
+   */
+  edges(node: number): readonly number[];
+  reverse(node: number): readonly number[];
+  isChar(node: number): boolean;
+  /**
+   * Called once per product step, so the exact search stays within its budget.
+   */
+  spend(): void;
+}
+
+interface Move {
+  readonly char: number;
+  readonly look: number;
+}
+
+/**
+ * The search a sound and an exact analysis share: exponential ambiguity in a
+ * loop, nearest the start first, else the longest chain of polynomial links.
+ */
+type Finding =
+  | { readonly complexity: "exponential"; readonly pump: Pump }
+  | {
+      readonly complexity: "polynomial";
+      readonly links: number;
+      readonly pump: Pump;
+    }
+  | undefined;
+
+function find(
+  space: Space,
+  order: readonly (readonly number[])[],
+  loops: readonly (readonly number[])[],
+  component: ReadonlyMap<number, number>,
+): Finding {
+  /**
+   * Tarjan emits components in reverse topological order, so the loop nearest
+   * the start is last.
    */
   for (let c = loops.length - 1; c >= 0; c -= 1) {
     const members = loops[c] ?? [];
     if (members.length === 0) continue;
-    const found = exponential(members, automaton);
-    if (found !== undefined)
-      return {
-        complexity: "exponential",
-        rule: enclosing(found.edges, automaton, root),
-        attack: attack(automaton, found.at, found.pump),
+    const pump = exponential(members, space);
+    if (pump !== undefined) return { complexity: "exponential", pump };
+  }
+  const found = polynomial(order, loops, component, space);
+  if (found === undefined) return undefined;
+  return { complexity: "polynomial", links: found.links, pump: found };
+}
+
+function report(
+  finding: Finding,
+  automaton: Automaton,
+  root: string,
+  exact: boolean,
+  attackOf: (pump: Pump) => Attack,
+): Analysis {
+  if (finding === undefined) return { complexity: "linear" };
+  const rule = enclosing(finding.pump.edges, automaton, root);
+  const attack = attackOf(finding.pump);
+  return finding.complexity === "exponential"
+    ? { complexity: "exponential", rule, attack, exact }
+    : {
+        complexity: "polynomial",
+        degree: finding.links + 1,
+        rule,
+        attack,
+        exact,
       };
+}
+
+/**
+ * Thrown when the exact search runs out of budget, and caught by `analyze`,
+ * which falls back to the sound finding.
+ */
+class OverBudget extends Error {}
+
+class Budget {
+  #left: number;
+
+  constructor(steps: number) {
+    this.#left = steps;
   }
 
-  const found = polynomial(order, loops, component, automaton);
-  if (found === undefined) return { complexity: "linear" };
-  return {
-    complexity: "polynomial",
-    degree: found.links + 1,
-    rule: enclosing(found.edges, automaton, root),
-    attack: attack(automaton, found.at, found.pump),
-  };
+  spend(): void {
+    this.#left -= 1;
+    if (this.#left < 0) throw new OverBudget();
+  }
+}
+
+/**
+ * A deterministic automaton that reads the input backwards. Its state at an
+ * offset is the set of states that would succeed on the input from there: a
+ * `char` state that accepts the next code point and whose ε-closure reaches one
+ * that succeeds on the rest, plus `accept` wherever reaching it is success,
+ * which is everywhere for a search and only at the end when anchored.
+ *
+ * It is built by subset construction from the end of the input over atoms, the
+ * ranges into which every `char` state's set cuts the code points, so that two
+ * code points in one atom behave the same everywhere. Each state remembers the
+ * step that first reached it, so a shortest input with a given look-ahead can
+ * be read back as an attack's suffix.
+ */
+class Lookahead {
+  readonly #automaton: Automaton;
+  readonly #atoms: readonly (readonly [number, number])[];
+  readonly #members: ReadonlySet<number>[] = [];
+  /**
+   * `#back[look].get(atom)`: every look-ahead that `atom` steps back to `look`
+   * from, which is what the input after that atom can have.
+   */
+  readonly #back: Map<number, number[]>[] = [];
+  readonly #parent: ({
+    readonly from: number;
+    readonly char: number;
+  } | null)[] = [];
+  readonly #moves = new Map<string, readonly Move[]>();
+
+  constructor(automaton: Automaton, anchored: boolean, budget: Budget) {
+    this.#automaton = automaton;
+    this.#atoms = atoms(automaton);
+    const { accept } = automaton;
+    const ids = new Map<string, number>();
+    const intern = (
+      members: readonly number[],
+      parent: { readonly from: number; readonly char: number } | null,
+    ): number => {
+      const key = members.join(",");
+      const known = ids.get(key);
+      if (known !== undefined) return known;
+      budget.spend();
+      const id = this.#members.length;
+      ids.set(key, id);
+      this.#members.push(new Set(members));
+      this.#back.push(new Map());
+      this.#parent.push(parent);
+      return id;
+    };
+    intern([accept], null);
+    for (let look = 0; look < this.#members.length; look += 1) {
+      const before = this.#before(this.#members[look] ?? new Set());
+      this.#atoms.forEach((atom, index) => {
+        budget.spend();
+        const members = before.filter((state) =>
+          contains(automaton.set(state), atom[0]),
+        );
+        if (!anchored) members.push(accept);
+        members.sort((x, y) => x - y);
+        const step = { from: look, char: representative([atom]) };
+        const to = intern(members, step);
+        /**
+         * Any atom from the same look-ahead gives as short a suffix, so prefer
+         * one that reads.
+         */
+        const first = this.#parent[to];
+        if (
+          first?.from === look
+          && !printable(first.char)
+          && printable(step.char)
+        )
+          this.#parent[to] = step;
+        const back = this.#back[to];
+        const list = back?.get(index);
+        if (list === undefined) back?.set(index, [look]);
+        else list.push(look);
+      });
+    }
+  }
+
+  get size(): number {
+    return this.#members.length;
+  }
+
+  succeeds(look: number, state: number): boolean {
+    return this.#members[look]?.has(state) ?? false;
+  }
+
+  /**
+   * The `char` states whose ε-closure reaches a member: a backward walk over
+   * ε-moves from the members, stopping at the `char` states it meets.
+   */
+  #before(members: ReadonlySet<number>): number[] {
+    const out = new Set<number>();
+    const seen = new Set(members);
+    const queue = [...members];
+    for (let index = 0; index < queue.length; index += 1) {
+      for (const from of this.#automaton.reverse(queue[index] ?? 0)) {
+        if (this.#automaton.isChar(from)) out.add(from);
+        else if (!seen.has(from)) {
+          seen.add(from);
+          queue.push(from);
+        }
+      }
+    }
+    return [...out];
+  }
+
+  moves(look: number, set: CodePointSet): readonly Move[] {
+    const key = `${look}:${set.join(";")}`;
+    const known = this.#moves.get(key);
+    if (known !== undefined) return known;
+    const chars = new Map<number, number>();
+    const back = this.#back[look];
+    for (const index of this.#within(set)) {
+      const atom = this.#atoms[index];
+      const after = back?.get(index);
+      if (atom === undefined || after === undefined) continue;
+      const char = representative([atom]);
+      for (const to of after) {
+        const known = chars.get(to);
+        if (known === undefined || (!printable(known) && printable(char)))
+          chars.set(to, char);
+      }
+    }
+    const out = [...chars].map(([to, char]) => ({ char, look: to }));
+    this.#moves.set(key, out);
+    return out;
+  }
+
+  /**
+   * The atoms inside `set`, which is a union of atoms because every set the
+   * search intersects is.
+   */
+  *#within(set: CodePointSet): Generator<number> {
+    for (const [from, to] of set) {
+      let low = 0;
+      let high = this.#atoms.length - 1;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if ((this.#atoms[middle]?.[1] ?? 0) < from) low = middle + 1;
+        else high = middle;
+      }
+      for (let index = low; index < this.#atoms.length; index += 1) {
+        const atom = this.#atoms[index];
+        if (atom === undefined || atom[0] > to) break;
+        yield index;
+      }
+    }
+  }
+
+  /**
+   * A shortest input whose look-ahead is `look`, read back from the steps that
+   * first reached it: each step prepends a code point.
+   */
+  suffix(look: number): string {
+    const chars: number[] = [];
+    for (
+      let step = this.#parent[look];
+      step !== undefined && step !== null;
+      step = this.#parent[step.from]
+    )
+      chars.push(step.char);
+    return String.fromCodePoint(...chars);
+  }
+}
+
+/**
+ * The ranges into which every `char` state's set cuts the code points, in order
+ * and covering all of them.
+ */
+function atoms(automaton: Automaton): (readonly [number, number])[] {
+  const cuts = new Set<number>([0]);
+  for (const state of automaton.states)
+    if (state.op === "char")
+      for (const [from, to] of state.set) {
+        cuts.add(from);
+        if (to < 0x10ffff) cuts.add(to + 1);
+      }
+  const sorted = [...cuts].sort((x, y) => x - y);
+  return sorted.map((from, index) => [
+    from,
+    (sorted[index + 1] ?? 0x110000) - 1,
+  ]);
+}
+
+function printable(point: number): boolean {
+  return point >= 0x21 && point <= 0x7e;
 }
 
 /**
@@ -529,7 +1051,7 @@ function components<$Node>(
 }
 
 /**
- * A pump found by a product search: the word, the state it starts and ends at,
+ * A pump found by a product search: the word, the node it starts and ends at,
  * and every automaton transition its paths take.
  */
 interface Pump {
@@ -539,22 +1061,64 @@ interface Pump {
 }
 
 /**
+ * Pairs or triples of indices into lists of the given sizes, packed into one
+ * number for a product search's maps and sets. Past the largest safe integer
+ * they are numbered as they are met instead. Closures rather than a class with
+ * private fields, because the build lowers `#fields` to helper calls and these
+ * run on every product step.
+ */
+interface Tuples {
+  key(i: number, j: number, k?: number): number;
+  first(key: number): number;
+  second(key: number): number;
+  third(key: number): number;
+}
+
+function tuples(first: number, second: number, third = 1): Tuples {
+  if (first * second * third <= Number.MAX_SAFE_INTEGER) {
+    const plane = second * third;
+    return {
+      key: (i, j, k = 0) => (i * second + j) * third + k,
+      first: (key) => Math.floor(key / plane),
+      second: (key) => Math.floor(key / third) % second,
+      third: (key) => key % third,
+    };
+  }
+  const ids = new Map<string, number>();
+  const list: (readonly [number, number, number])[] = [];
+  return {
+    key: (i, j, k = 0) => {
+      const text = `${i},${j},${k}`;
+      const known = ids.get(text);
+      if (known !== undefined) return known;
+      ids.set(text, list.length);
+      list.push([i, j, k]);
+      return list.length - 1;
+    },
+    first: (key) => list[key]?.[0] ?? 0,
+    second: (key) => list[key]?.[1] ?? 0,
+    third: (key) => list[key]?.[2] ?? 0,
+  };
+}
+
+/**
  * Exponential ambiguity inside one loop. In the product of the loop with
  * itself, two distinct paths `q → q` on one word are a cycle through a diagonal
- * state `(q, q)` that either leaves the diagonal or takes a step two ε-paths
+ * node `(q, q)` that either leaves the diagonal or takes a step two ε-paths
  * make (a parallel pair of edges). Both cycles stay inside the loop, so the
- * product never needs more of the automaton.
+ * product never needs more of the graph. Both copies read the same input, so
+ * they share a look-ahead.
  */
 function exponential(
   members: readonly number[],
-  automaton: Automaton,
+  space: Space,
 ): Pump | undefined {
-  const inside = new Set(members);
-  const width = automaton.states.length;
-  const key = (a: number, b: number): number => a * width + b;
-  const pair = (product: number): [number, number] => [
-    Math.floor(product / width),
-    product % width,
+  const { automaton, looks } = space;
+  const index = new Map(members.map((member, at) => [member, at]));
+  const packed = tuples(members.length, members.length);
+  const nodes = (product: number): [number, number] => [
+    members[packed.first(product)] ?? 0,
+    members[packed.second(product)] ?? 0,
   ];
 
   /**
@@ -567,26 +1131,35 @@ function exponential(
     readonly char: number;
     readonly double: boolean;
   }[] => {
-    const [a, b] = pair(product);
+    space.spend();
+    const [u, v] = nodes(product);
+    const a = Math.floor(u / looks);
+    const b = Math.floor(v / looks);
     const both = intersect(automaton.set(a), automaton.set(b));
     if (both.length === 0) return [];
-    const char = representative(both);
     const out = [];
-    for (const [t1, m1] of automaton.successors(a))
-      if (inside.has(t1))
-        for (const t2 of automaton.successors(b).keys())
-          if (inside.has(t2))
-            out.push({
-              to: key(t1, t2),
-              char,
-              double: a === b && t1 === t2 && m1 > 1,
-            });
+    for (const move of space.moves(u % looks, both))
+      for (const [t1, m1] of space.next(a, move.look)) {
+        const i = index.get(t1 * looks + move.look);
+        if (i === undefined) continue;
+        for (const t2 of space.next(b, move.look).keys()) {
+          const j = index.get(t2 * looks + move.look);
+          if (j === undefined) continue;
+          out.push({
+            to: packed.key(i, j),
+            char: move.char,
+            double: u === v && t1 === t2 && m1 > 1,
+          });
+        }
+      }
     return out;
   };
+  const diagonal = (product: number): boolean =>
+    packed.first(product) === packed.second(product);
 
-  const diagonal = members.map((q) => key(q, q));
-  const reachable = explore(diagonal, (product) =>
-    steps(product).map(({ to }) => to),
+  const reachable = explore(
+    members.map((_, at) => packed.key(at, at)),
+    (product) => steps(product).map(({ to }) => to),
   );
   const { order } = components(reachable, (product) =>
     steps(product).map(({ to }) => to),
@@ -594,23 +1167,17 @@ function exponential(
 
   for (const group of order) {
     const here = new Set(group);
-    const anchor = group.find((product) => {
-      const [a, b] = pair(product);
-      return a === b;
-    });
+    const anchor = group.find(diagonal);
     if (anchor === undefined) continue;
     const within = (product: number) =>
       steps(product).filter(({ to }) => here.has(to));
 
     /**
-     * The off-diagonal state nearest the anchor, so the pump is short.
+     * The off-diagonal node nearest the anchor, so the pump is short.
      */
     const away = explore([anchor], (product) =>
       within(product).map(({ to }) => to),
-    ).find((product) => {
-      const [a, b] = pair(product);
-      return a !== b;
-    });
+    ).find((product) => !diagonal(product));
     let word: number[] | undefined;
     let visited: number[] = [];
     if (away !== undefined) {
@@ -633,11 +1200,15 @@ function exponential(
       }
     }
     if (word === undefined) continue;
-    const [q] = pair(anchor);
+    const [at] = nodes(anchor);
     return {
-      at: q,
+      at,
       pump: String.fromCodePoint(...word),
-      edges: transitions(visited.map(pair)),
+      edges: transitions(
+        visited.map((product) =>
+          nodes(product).map((node) => Math.floor(node / looks)),
+        ),
+      ),
     };
   }
   return undefined;
@@ -651,15 +1222,15 @@ function exponential(
  * A link from `C₁` to `C₂` needs `p ∈ C₁`, `q ∈ C₂`, and one word on which `p →
  * p`, `p → q`, and `q → q`: a path in the product of three copies from `(p, p,
  * q)` to `(p, q, q)`. The first copy stays in `C₁`, the third in `C₂`, and the
- * second passes through states between them, so the search is confined to
- * those. `order` is the ε-NFA's components, and `loops[c]` the `char` states of
+ * second passes through nodes between them, so the search is confined to those.
+ * `order` is the graph's components, and `loops[c]` the `char` nodes of
  * component `c` if it has a cycle.
  */
 function polynomial(
   order: readonly (readonly number[])[],
   loops: readonly (readonly number[])[],
   component: ReadonlyMap<number, number>,
-  automaton: Automaton,
+  space: Space,
 ): (Pump & { readonly links: number }) | undefined {
   /**
    * `best[c]`: the most links in a chain starting at component `c` or after it,
@@ -673,7 +1244,7 @@ function polynomial(
     let links = 0;
     let first: Pump | undefined;
     for (const member of members)
-      for (const target of automaton.edges(member)) {
+      for (const target of space.edges(member)) {
         const result = best[component.get(target) ?? c];
         if (result !== undefined && result.links > links) {
           links = result.links;
@@ -682,14 +1253,14 @@ function polynomial(
       }
     const loop = loops[c] ?? [];
     if (loop.length > 0) {
-      const forward = new Set(explore(members, (at) => automaton.edges(at)));
+      const forward = new Set(explore(members, (at) => space.edges(at)));
       for (let d = 0; d < c; d += 1) {
         const result = best[d];
         const target = loops[d] ?? [];
         if (target.length === 0 || result === undefined) continue;
         if (result.links + 1 <= links) continue;
         if (!target.some((at) => forward.has(at))) continue;
-        const link = idaLink(loop, target, forward, automaton);
+        const link = idaLink(loop, target, forward, space);
         if (link === undefined) continue;
         links = result.links + 1;
         first = link;
@@ -705,57 +1276,113 @@ function polynomial(
 }
 
 /**
- * Search for an IDA link from loop `from` to loop `to`, given the ε-NFA states
+ * Search for an IDA link from loop `from` to loop `to`, given the nodes
  * reachable from `from`.
  */
 function idaLink(
   from: readonly number[],
   to: readonly number[],
   forward: ReadonlySet<number>,
-  automaton: Automaton,
+  space: Space,
 ): Pump | undefined {
-  const first = new Set(from);
-  const third = new Set(to);
-  const backward = new Set(explore(to, (at) => automaton.reverse(at)));
-  const between = new Set(
-    [...forward].filter((at) => backward.has(at) && automaton.isChar(at)),
+  const { automaton, looks } = space;
+  const backward = new Set(explore(to, (at) => space.reverse(at)));
+  const between = [...forward].filter(
+    (at) => backward.has(at) && space.isChar(at),
   );
-  const width = automaton.states.length;
-  const key = (x: number, y: number, z: number): number =>
-    (x * width + y) * width + z;
-  const triple = (product: number): [number, number, number] => [
-    Math.floor(product / (width * width)),
-    Math.floor(product / width) % width,
-    product % width,
+  const first = new Map(from.map((node, at) => [node, at]));
+  const second = new Map(between.map((node, at) => [node, at]));
+  const third = new Map(to.map((node, at) => [node, at]));
+  const packed = tuples(from.length, between.length, to.length);
+  const nodes = (product: number): [number, number, number] => [
+    from[packed.first(product)] ?? 0,
+    between[packed.second(product)] ?? 0,
+    to[packed.third(product)] ?? 0,
   ];
   const steps = (
     product: number,
   ): { readonly to: number; readonly char: number }[] => {
-    const [x, y, z] = triple(product);
+    space.spend();
+    const [u, v, w] = nodes(product);
+    const x = Math.floor(u / looks);
+    const y = Math.floor(v / looks);
+    const z = Math.floor(w / looks);
     const all = intersect(
       intersect(automaton.set(x), automaton.set(y)),
       automaton.set(z),
     );
     if (all.length === 0) return [];
-    const char = representative(all);
     const out = [];
-    for (const x2 of automaton.successors(x).keys())
-      if (first.has(x2))
-        for (const y2 of automaton.successors(y).keys())
-          if (between.has(y2))
-            for (const z2 of automaton.successors(z).keys())
-              if (third.has(z2)) out.push({ to: key(x2, y2, z2), char });
+    for (const move of space.moves(u % looks, all))
+      for (const x2 of space.next(x, move.look).keys()) {
+        const i = first.get(x2 * looks + move.look);
+        if (i === undefined) continue;
+        for (const y2 of space.next(y, move.look).keys()) {
+          const j = second.get(y2 * looks + move.look);
+          if (j === undefined) continue;
+          for (const z2 of space.next(z, move.look).keys()) {
+            const k = third.get(z2 * looks + move.look);
+            if (k !== undefined)
+              out.push({ to: packed.key(i, j, k), char: move.char });
+          }
+        }
+      }
     return out;
   };
 
-  for (const p of from)
+  /**
+   * Only a start where the first two copies part on the first step needs
+   * trying: rotate any witness to begin where they part, and it is still a
+   * witness, from that node, with the third copy wherever it was then. All
+   * three copies read one input, so the first and third start with one
+   * look-ahead.
+   */
+  const parts = (p: number): boolean => {
+    for (const move of space.moves(
+      p % looks,
+      automaton.set(Math.floor(p / looks)),
+    )) {
+      let stay: number | undefined;
+      let leave: number | undefined;
+      for (const target of space
+        .next(Math.floor(p / looks), move.look)
+        .keys()) {
+        const at = target * looks + move.look;
+        if (first.has(at)) stay ??= at;
+        if (second.has(at)) {
+          if (leave === undefined || leave === stay) leave = at;
+        }
+      }
+      if (stay !== undefined && leave !== undefined && stay !== leave)
+        return true;
+    }
+    return false;
+  };
+  for (const p of from.filter(parts))
     for (const q of to) {
-      const found = route(key(p, p, q), key(p, q, q), steps);
+      if (q % looks !== p % looks) continue;
+      const i = first.get(p);
+      const j = second.get(p);
+      const jq = second.get(q);
+      const k = third.get(q);
+      if (
+        i === undefined
+        || j === undefined
+        || jq === undefined
+        || k === undefined
+      )
+        continue;
+      const start = packed.key(i, j, k);
+      const found = route(start, packed.key(i, jq, k), steps);
       if (found === undefined) continue;
       return {
         at: p,
         pump: String.fromCodePoint(...found.chars),
-        edges: transitions([key(p, p, q), ...found.nodes].map(triple)),
+        edges: transitions(
+          [start, ...found.nodes].map((product) =>
+            nodes(product).map((node) => Math.floor(node / looks)),
+          ),
+        ),
       };
     }
   return undefined;

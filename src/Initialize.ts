@@ -9,6 +9,12 @@ import type { Analysis, Config, Grammar, Initialized } from "./Types";
  * than `allowedComplexity`, so allowing `"exponential"`, the worst there is,
  * turns the check off.
  */
+/**
+ * The default `analysisBudget`, from measurements on the realistic grammar and
+ * the fuzzer's random grammars (see AGENTS.md).
+ */
+const DEFAULT_BUDGET = 1_000_000;
+
 const SEVERITY: Readonly<Record<Analysis["complexity"], number>> = {
   linear: 0,
   polynomial: 1,
@@ -28,6 +34,12 @@ export function initialize(config: Config = {}): Initialized {
   if (!Object.prototype.hasOwnProperty.call(SEVERITY, allowed))
     throw new AsterError.InvalidConfigError("allowedComplexity", allowed);
   const limit = SEVERITY[allowed];
+  const budget = config.analysisBudget ?? DEFAULT_BUDGET;
+  if (
+    typeof budget !== "number"
+    || !(budget === Infinity || (Number.isSafeInteger(budget) && budget >= 0))
+  )
+    throw new AsterError.InvalidConfigError("analysisBudget", budget);
 
   /**
    * Analyses of grammars from `.compose()`, which are deeply frozen, so a
@@ -45,7 +57,7 @@ export function initialize(config: Config = {}): Initialized {
     const key = `${anchored ? "^" : ""}${rule}`;
     const known = frozen ? cache.get(grammar)?.get(key) : undefined;
     if (known !== undefined) return known;
-    const found = analyze(fragment.node, rule, anchored);
+    const found = analyze(fragment.node, rule, anchored, budget);
     if (frozen) {
       const entries = cache.get(grammar) ?? new Map<string, Analysis>();
       cache.set(grammar, entries.set(key, found));
