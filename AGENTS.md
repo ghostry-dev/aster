@@ -6,7 +6,7 @@ Context for working on this codebase across sessions. Not user-facing: this is h
 
 ## Mental model
 
-One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. So far there is the definition side (`grammar().define(…)…compose()` and the combinators), the introspection IR on `./unstable-ir`, the definition-time checks, and `initialize()`, which returns the functions that consume a grammar: the regex emitter (`toPattern`/`toRegExp`), guarded by ReDoS analysis (`analyze`); and the parser (`toParser`), which runs an internal NFA and reports failures. Differential fuzzing checks the parser against the JS regex engine and the analysis against recheck. The fabricator integration is deferred until aster has been released on its own: that release ships without it, with the IR still on `./unstable-ir`.
+One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. So far there is the definition side (`grammar().define(…)…compose()` and the combinators), the introspection IR on `./unstable-ir`, the definition-time checks, and `initialize()`, which returns the functions that consume a grammar: the regex emitter (`toPattern`/`toRegExp`), guarded by ReDoS analysis (`analyze`); and the parser (`toParser`), which runs an internal NFA and reports failures. Differential fuzzing checks the parser against the JS regex engine and the analysis against recheck.
 
 **`initialize` is the configured entry point**, as in every `@ghostry` library: `initialize(config)` returns `{ toPattern, toRegExp, toParser, analyze }` built from the config. Defining a grammar does not depend on configuration, so `grammar()`, the combinators, `AsterError`, and the types stay top-level exports. The one setting, `allowedComplexity`, is the slowest a pattern from `toPattern`/`toRegExp` may be, on the same scale `analyze` reports: `"linear"` (the default, so safe is the default), `"polynomial"`, or `"exponential"`, which, as the worst there is, turns the check off. A slower pattern throws `VulnerablePatternError`. An unknown value throws `InvalidConfigError` rather than falling back, so a typo cannot turn the check off.
 
@@ -161,7 +161,7 @@ The realistic grammar is linear in every rule, and a test keeps it so. Two of it
 
 ## Package layout
 
-One package at the repository root, like `@ghostry/harness`. The IR is the subpath export `./unstable-ir` (`src/IR/index.ts`), not a sibling package. It moves to a stable path when the fabricator integration freezes it, which comes after aster's own release, and until then any kind or field may change in any release.
+One package at the repository root, like `@ghostry/harness`. The IR is the subpath export `./unstable-ir` (`src/IR/index.ts`), not a sibling package. It moves to a stable path once its shape is settled, and until then any kind or field may change in any release.
 
 | module           | holds                                                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -1,14 +1,13 @@
 /**
- * The `@ghostry/aster/unstable-ir` subpath: the introspection IR a consumer
- * such as `@ghostry/fabricator` walks. `grammar.rules` is this IR already; this
+ * The `@ghostry/aster/unstable-ir` subpath: the introspection IR, for tools
+ * that read a grammar's structure. `grammar.rules` is this IR already; this
  * module names its shape and gives walkers the one primitive they all need.
  *
- * Unstable until the fabricator integration freezes it, which waits until aster
- * has been released on its own. Until then a kind or a field can change in any
- * release, which is why it lives on a subpath named for that and not on the
- * package root.
+ * Unstable until its shape is settled. Until then a kind or a field can change
+ * in any release, which is why it lives on a subpath named for that and not on
+ * the package root.
  *
- * Four properties hold now and will hold after the freeze:
+ * Four properties hold now and will hold once it is stable:
  *
  * 1. **Plain data.** No closures, class instances, or methods; every node is
  *    frozen and survives a JSON round trip unchanged.
