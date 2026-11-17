@@ -3,9 +3,10 @@
  * such as `@ghostry/fabricator` walks. `grammar.rules` is this IR already; this
  * module names its shape and gives walkers the one primitive they all need.
  *
- * Unstable until the fabricator integration freezes it. Until then a kind or a
- * field can change in any release, which is why it lives on a subpath named for
- * that and not on the package root.
+ * Unstable until the fabricator integration freezes it, which waits until aster
+ * has been released on its own. Until then a kind or a field can change in any
+ * release, which is why it lives on a subpath named for that and not on the
+ * package root.
  *
  * Four properties hold now and will hold after the freeze:
  *

@@ -6,7 +6,7 @@ Context for working on this codebase across sessions. Not user-facing: this is h
 
 ## Mental model
 
-One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. So far there is the definition side (`grammar().define(…)…compose()` and the combinators), the introspection IR on `./unstable-ir`, the definition-time checks, and `initialize()`, which returns the functions that consume a grammar: the regex emitter (`toPattern`/`toRegExp`), guarded by ReDoS analysis (`analyze`); and the parser (`toParser`), which runs an internal NFA and reports failures. Differential fuzzing checks the parser against the JS regex engine and the analysis against recheck. The fabricator integration comes later, in the design doc's order.
+One grammar definition is meant to produce two outputs that accept exactly the same strings: a `RegExp` for validation and a parser that returns a typed AST with source spans. So far there is the definition side (`grammar().define(…)…compose()` and the combinators), the introspection IR on `./unstable-ir`, the definition-time checks, and `initialize()`, which returns the functions that consume a grammar: the regex emitter (`toPattern`/`toRegExp`), guarded by ReDoS analysis (`analyze`); and the parser (`toParser`), which runs an internal NFA and reports failures. Differential fuzzing checks the parser against the JS regex engine and the analysis against recheck. The fabricator integration is deferred until aster has been released on its own: that release ships without it, with the IR still on `./unstable-ir`.
 
 **`initialize` is the configured entry point**, as in every `@ghostry` library: `initialize(config)` returns `{ toPattern, toRegExp, toParser, analyze }` built from the config. Defining a grammar does not depend on configuration, so `grammar()`, the combinators, `AsterError`, and the types stay top-level exports. The one setting, `redos`, is the least complexity at which `toPattern`/`toRegExp` throw `VulnerablePatternError`: `"polynomial"` (the default, so safe is the default), `"exponential"`, or `"never"`. An unknown value throws `InvalidConfigError` rather than falling back, so a typo cannot turn the check off.
 
@@ -161,7 +161,7 @@ The realistic grammar is linear in every rule, and a test keeps it so. Two of it
 
 ## Package layout
 
-One package at the repository root, like `@ghostry/harness`. The IR is the subpath export `./unstable-ir` (`src/IR/index.ts`), not a sibling package. It moves to a stable path when the fabricator integration freezes it, and until then any kind or field may change in any release.
+One package at the repository root, like `@ghostry/harness`. The IR is the subpath export `./unstable-ir` (`src/IR/index.ts`), not a sibling package. It moves to a stable path when the fabricator integration freezes it, which comes after aster's own release, and until then any kind or field may change in any release.
 
 | module           | holds                                                                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -191,7 +191,7 @@ Tests import via the package specifier `@ghostry/aster`, never a relative `../sr
 
 **`check`/`test` deliberately do not build; `verify` does.** `.github/workflows/test.yml` downloads the `dist` artifact built by `build.yml` and runs `bun run test`, so a build inside `test` would overwrite the artifact under test. Locally, `bun run verify` is `build` then `test`. Running `bun run test` against a missing or stale `dist/` fails, or checks stale types: build first.
 
-`main.yml` and `publish.yml` are not in `.github/workflows` yet. In harness, any push to `main` with an unreleased version publishes, and the name is not confirmed. Copy them from harness when it is.
+**Releasing is a version change on `main`.** `main.yml` builds and tests every push to `main`, then reads `package.json`'s version. If no GitHub release is tagged `v<version>`, `publish.yml` runs: it creates that release with the attested tarball, publishes to npm with provenance (a version with a `-` goes to the `experimental` tag, anything else to `latest`), and publishes to JSR. JSR reads its version from `jsr.json`, not `package.json`, so a release bumps both. The first npm publish authenticates with the `NPM_AUTH_TOKEN` secret, because a trusted publisher cannot be configured for a package that does not exist yet; `publish.yml` says what to delete once one is.
 
 ## Tooling / conventions
 

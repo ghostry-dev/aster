@@ -69,7 +69,7 @@ export { AsterError } from "./Error";
 /**
  * The expression types are what the combinators return, exported so inferred
  * grammar types can be named in a consumer's declarations. They are not yet a
- * stable introspection contract; that arrives with the unstable IR subpath.
+ * stable introspection contract; `./unstable-ir` is the closest there is.
  *
  * A grammar's type is the flat union of its `RuleDefinition`s; a `RuleRef` is a
  * rule's name alone. `Vocabulary` is the by-name object a builder sees, derived
