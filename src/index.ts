@@ -39,9 +39,10 @@ export {
  * Build the functions that consume a grammar: `toPattern`, `toRegExp`,
  * `toParser`, and `analyze`. `initialize()` with no config is safe by default:
  * `toPattern` and `toRegExp` throw `VulnerablePatternError` rather than return
- * a pattern a backtracking engine can take superlinear time on. `redos` relaxes
- * that to exponential patterns only, or turns it off; `analyze` reports either
- * way, with an attack string, and the parser is linear for every grammar.
+ * a pattern a backtracking engine can take superlinear time on.
+ * `allowedComplexity` raises that limit to polynomial patterns, or to
+ * exponential ones, which turns it off; `analyze` reports either way, with an
+ * attack string, and the parser is linear for every grammar.
  *
  * Patterns are anchored unless `anchored: false`, written for the `v` flag and
  * valid with the same meaning under `u` (so they serve as a JSON Schema
@@ -61,8 +62,9 @@ export { initialize } from "./Initialize";
  * `NullableQuantifierError`, and `InvalidExpressionError`, each naming the
  * rule. `initialize` throws `InvalidConfigError` for an option it does not
  * accept. `toPattern`/`toRegExp` throw `VulnerablePatternError` for a pattern
- * `redos` rejects. `toPattern`/`toRegExp`/`toParser`/`analyze` throw
- * `UnknownRuleError`, plus any of those for a grammar that arrived as data.
+ * slower than `allowedComplexity`. `toPattern`/`toRegExp`/`toParser`/`analyze`
+ * throw `UnknownRuleError`, plus any of those for a grammar that arrived as
+ * data.
  */
 export { AsterError } from "./Error";
 

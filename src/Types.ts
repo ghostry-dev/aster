@@ -408,14 +408,14 @@ export type Vulnerability = Exclude<
  */
 export interface Config {
   /**
-   * The least complexity at which `toPattern` and `toRegExp` throw
-   * `VulnerablePatternError` instead of returning a pattern that a backtracking
-   * engine can take superlinear time on. Defaults to `"polynomial"`, which
-   * rejects any superlinear pattern. `"exponential"` rejects only exponential
-   * ones, and `"never"` turns the check off. `analyze` reports either way, and
-   * the parser is linear for every grammar.
+   * The slowest a pattern from `toPattern` or `toRegExp` may be in a
+   * backtracking regex engine, on the scale `analyze` reports. A slower one
+   * throws `VulnerablePatternError` instead. Defaults to `"linear"`, which
+   * rejects any superlinear pattern. `"polynomial"` rejects only exponential
+   * ones, and `"exponential"`, the worst there is, turns the check off.
+   * `analyze` reports either way, and the parser is linear for every grammar.
    */
-  readonly redos?: "polynomial" | "exponential" | "never";
+  readonly allowedComplexity?: "linear" | "polynomial" | "exponential";
 }
 
 /**
@@ -427,7 +427,8 @@ export interface Initialized {
    * The pattern source for a rule: anchored unless `anchored: false`, written
    * for the `v` flag and valid with the same meaning under `u`, so it can serve
    * as a JSON Schema `pattern`, and free of capturing groups. Throws
-   * `VulnerablePatternError` if the pattern is as slow as `redos` forbids.
+   * `VulnerablePatternError` if the pattern is slower than
+   * `allowedComplexity`.
    */
   toPattern<$Grammar extends Grammar>(
     grammar: $Grammar,

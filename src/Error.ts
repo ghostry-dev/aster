@@ -219,9 +219,9 @@ export namespace AsterError {
 
   /**
    * Thrown by `toPattern` and `toRegExp` when the analysis finds the rule's
-   * pattern can take superlinear time in a backtracking regex engine, at or
-   * above the complexity `initialize({ redos })` rejects (any superlinear
-   * pattern, by default).
+   * pattern can take superlinear time in a backtracking regex engine, slower
+   * than `initialize({ allowedComplexity })` allows (only linear patterns, by
+   * default).
    */
   export class VulnerablePatternError extends AsterError {
     constructor(
@@ -252,7 +252,7 @@ export namespace AsterError {
         + `${JSON.stringify(analysis.attack.suffix)}.${where} Parse untrusted `
         + `input with toParser(), which is linear for every grammar; or rewrite `
         + `the rule so no input matches it more than one way; or pass a `
-        + `different \`redos\` to initialize() to allow it.`;
+        + `higher \`allowedComplexity\` to initialize() to allow it.`;
     }
   }
 

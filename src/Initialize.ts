@@ -5,18 +5,14 @@ import { toParser } from "./Parse";
 import type { Analysis, Config, Grammar, Initialized } from "./Types";
 
 /**
- * How severe each complexity is, and the least severity each `redos` setting
- * rejects. `"never"` is above every complexity.
+ * How severe each complexity is. A pattern is rejected when it is more severe
+ * than `allowedComplexity`, so allowing `"exponential"`, the worst there is,
+ * turns the check off.
  */
 const SEVERITY: Readonly<Record<Analysis["complexity"], number>> = {
   linear: 0,
   polynomial: 1,
   exponential: 2,
-};
-const REJECTS: Readonly<Record<NonNullable<Config["redos"]>, number>> = {
-  polynomial: 1,
-  exponential: 2,
-  never: 3,
 };
 
 /**
@@ -28,10 +24,10 @@ const REJECTS: Readonly<Record<NonNullable<Config["redos"]>, number>> = {
  * combinators are top-level exports rather than members of the result.
  */
 export function initialize(config: Config = {}): Initialized {
-  const redos = config.redos ?? "polynomial";
-  if (!Object.prototype.hasOwnProperty.call(REJECTS, redos))
-    throw new AsterError.InvalidConfigError("redos", redos);
-  const rejects = REJECTS[redos];
+  const allowed = config.allowedComplexity ?? "linear";
+  if (!Object.prototype.hasOwnProperty.call(SEVERITY, allowed))
+    throw new AsterError.InvalidConfigError("allowedComplexity", allowed);
+  const limit = SEVERITY[allowed];
 
   /**
    * Analyses of grammars from `.compose()`, which are deeply frozen, so a
@@ -60,17 +56,14 @@ export function initialize(config: Config = {}): Initialized {
   const instance: Initialized = {
     toPattern(grammar, rule, options = {}) {
       const fragment = emit(grammar, rule);
-      if (rejects <= SEVERITY.exponential) {
+      if (limit < SEVERITY.exponential) {
         const found = analysisOf(
           grammar,
           rule,
           fragment,
           options.anchored !== false,
         );
-        if (
-          found.complexity !== "linear"
-          && SEVERITY[found.complexity] >= rejects
-        )
+        if (found.complexity !== "linear" && SEVERITY[found.complexity] > limit)
           throw new AsterError.VulnerablePatternError(rule, found);
       }
       return anchor(fragment, options);

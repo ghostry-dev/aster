@@ -22,7 +22,7 @@ import { deep } from "./fixtures/deep";
 import { realistic } from "./stress/Realistic";
 
 const { analyze, toPattern, toRegExp, toParser } = initialize({
-  redos: "never",
+  allowedComplexity: "exponential",
 });
 
 const a = literal("a");
@@ -251,7 +251,7 @@ describe("agreement with recheck", () => {
   });
 });
 
-describe("the redos setting", () => {
+describe("allowedComplexity", () => {
   test("by default, any superlinear pattern throws", () => {
     const strict = initialize();
     const error = attest.throws(AsterError.VulnerablePatternError, () =>
@@ -279,16 +279,16 @@ describe("the redos setting", () => {
     expect(error.message).toContain('in rule "words"');
   });
 
-  test('"exponential" allows polynomial patterns only', () => {
-    const relaxed = initialize({ redos: "exponential" });
+  test('"polynomial" allows polynomial patterns but not exponential ones', () => {
+    const relaxed = initialize({ allowedComplexity: "polynomial" });
     expect(relaxed.toPattern(shapes, "twoLoops")).toBe("^a*a*$");
     attest.throws(AsterError.VulnerablePatternError, () =>
       relaxed.toPattern(shapes, "nested"),
     );
   });
 
-  test('"never" allows everything, and analyze reports either way', () => {
-    const open = initialize({ redos: "never" });
+  test('"exponential" allows everything, and analyze reports either way', () => {
+    const open = initialize({ allowedComplexity: "exponential" });
     expect(open.toPattern(shapes, "nested")).toBe("^(?:a+)+$");
     expect(initialize().analyze(shapes, "nested").complexity).toBe(
       "exponential",
@@ -311,10 +311,13 @@ describe("the redos setting", () => {
   test("an unknown setting throws rather than falling back", () => {
     const error = attest.throws(AsterError.InvalidConfigError, () =>
       // @ts-expect-error `sometimes` is not a setting
-      initialize({ redos: "sometimes" }),
+      initialize({ allowedComplexity: "sometimes" }),
     );
     expect(error.name).toBe("@ghostry/aster:InvalidConfigError");
-    expect([error.option, error.value]).toEqual(["redos", "sometimes"]);
+    expect([error.option, error.value]).toEqual([
+      "allowedComplexity",
+      "sometimes",
+    ]);
   });
 });
 
@@ -335,7 +338,7 @@ describe("caching", () => {
   });
 
   test("a grammar that arrived as data is analyzed every time", () => {
-    const instance = initialize({ redos: "never" });
+    const instance = initialize({ allowedComplexity: "exponential" });
     const data = JSON.parse(JSON.stringify(shapes)) as Grammar;
     expect(instance.analyze(data, "letters").complexity).toBe("linear");
     const letters = data.rules.find(({ name }) => name === "letters");

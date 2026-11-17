@@ -14,7 +14,7 @@ import { nearMisses, strings } from "./fixtures/inputs";
 import { Random } from "./fixtures/random";
 
 const { analyze, toPattern, toRegExp, toParser } = initialize({
-  redos: "never",
+  allowedComplexity: "exponential",
 });
 
 /**
