@@ -14,21 +14,24 @@ Define a grammar once. Use the regex where you need a fast yes or no in any engi
 </div>
 
 > [!WARNING]
-> Pre-release. Grammar definition, validation, the regex emitter, and the parser with its failure reports work, and are fuzzed against each other; ReDoS analysis is not built yet. Nothing is published.
+> Pre-release. Grammar definition, validation, the regex emitter with ReDoS analysis, and the parser with its failure reports work, and are fuzzed against each other and against recheck. Nothing is published.
 
 ## Example
 
 ```ts
 import {
+  either,
   grammar,
+  initialize,
   literal,
+  oneOrMore,
   range,
   sequence,
-  toParser,
-  toPattern,
-  toRegExp,
+  zeroOrMore,
   type AstOf,
 } from "@ghostry/aster";
+
+const { toPattern, toRegExp, toParser, analyze } = initialize();
 
 const date = grammar()
   .define("digit", () => range("0", "9"))
@@ -59,6 +62,23 @@ if (!failed.ok) {
 ```
 
 The parser accepts exactly the strings the regex accepts. Where an input could be split more than one way, it returns the split the regex would make. Every loop iteration is kept, unlike a regex capture inside a loop. It runs in time linear in the input for every grammar, so it is safe on input that would make a backtracking regex hang. When an input does not match, the parser reports the furthest point any reading of it reached, what could have come next there, and the line and column.
+
+## Safe by default
+
+A backtracking regex engine can take exponential time on a pattern that can match the same input in many ways, such as `(?:\w+| )*`. That is a denial-of-service risk (ReDoS) wherever the input is untrusted. `toPattern` and `toRegExp` analyze every pattern and throw `VulnerablePatternError` rather than return one that can take superlinear time:
+
+```ts
+const words = grammar()
+  .define("word", () => oneOrMore(range("a", "z")))
+  .define("text", ({ word }) => zeroOrMore(either(word, literal(" "))))
+  .compose();
+
+toRegExp(words, "text"); // throws VulnerablePatternError: exponential time, in rule "text"
+analyze(words, "text");
+// { complexity: "exponential", rule: "text", attack: { prefix: "a", pump: "aa", suffix: "\u0000" } }
+```
+
+`analyze` reports how slow a pattern can be, and an input that shows it, without throwing. The parser runs in linear time for every grammar, so it is the safe way to read untrusted input whatever the analysis says. To accept slower patterns, configure the instance: `initialize({ redos: "exponential" })` allows polynomial ones and `initialize({ redos: "never" })` allows everything. The analysis is conservative. It never misses a slow pattern, but for a search (`anchored: false`) it can flag one that a real engine finishes quickly, because a search stops at its first match.
 
 Patterns are anchored by default, have no capturing groups, and are valid under both the `v` flag and the `u` flag, so they work as a JSON Schema `pattern`.
 

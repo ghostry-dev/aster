@@ -1,11 +1,6 @@
-import {
-  AsterError,
-  toParser,
-  toPattern,
-  toRegExp,
-  type Grammar,
-} from "@ghostry/aster";
+import { AsterError, initialize, type Grammar } from "@ghostry/aster";
 import { compile, type Program } from "#internal/NFA";
+import { checkSync } from "recheck";
 import { expect, test } from ".";
 import { furthest } from "./fixtures/backtrack";
 import {
@@ -17,6 +12,10 @@ import {
 } from "./fixtures/fuzz";
 import { nearMisses, strings } from "./fixtures/inputs";
 import { Random } from "./fixtures/random";
+
+const { analyze, toPattern, toRegExp, toParser } = initialize({
+  redos: "never",
+});
 
 /**
  * Differential fuzzing: random grammars, random inputs, and the regex and the
@@ -191,4 +190,65 @@ test(
     expect(accepted).toBeGreaterThan(samples * 0.8);
   },
   Math.max(60_000, RUNS * 100),
+);
+
+/**
+ * The ReDoS analysis is sound: on random grammars, anchored and as a search, it
+ * never calls a pattern less severe than recheck's automaton checker does.
+ * Anchored, it must also agree exactly. It did on all 5,005 random patterns
+ * measured, so a difference is either an over-report the analysis should not
+ * make or a change in recheck, and both are worth a look. As a search it may
+ * report more, since it ignores match priority (see `Analyze.test.ts`). recheck
+ * is slower than everything else here, so this covers a third of the seeds, and
+ * skips a pattern recheck cannot decide.
+ */
+test(
+  `the analysis is never less severe than recheck on ${Math.ceil(RUNS / 3)} random grammars`,
+  () => {
+    const rank = (complexity: string, degree: number): number =>
+      complexity === "exponential"
+        ? 1_000
+        : complexity === "polynomial"
+          ? degree
+          : 0;
+    const unsound: unknown[] = [];
+    let decided = 0;
+    for (
+      let run = 0;
+      run < Math.ceil(RUNS / 3) && unsound.length < 5;
+      run += 1
+    ) {
+      const seed = SEED + run;
+      const { grammar } = draw(new Random(seed));
+      for (const { name: rule } of grammar.rules)
+        for (const anchored of [true, false]) {
+          const ours = analyze(grammar, rule, { anchored });
+          const pattern = toPattern(grammar, rule, { anchored });
+          const theirs = checkSync(pattern, "u", { checker: "automaton" });
+          if (theirs.status === "unknown") continue;
+          decided += 1;
+          const mine = rank(
+            ours.complexity,
+            ours.complexity === "polynomial" ? ours.degree : 1,
+          );
+          const reference = rank(
+            theirs.complexity.type,
+            theirs.complexity.type === "polynomial"
+              ? theirs.complexity.degree
+              : 1,
+          );
+          if (mine < reference || (anchored && mine !== reference))
+            unsound.push({
+              seed,
+              rule,
+              pattern,
+              ours,
+              theirs: theirs.complexity,
+            });
+        }
+    }
+    expect(unsound).toEqual([]);
+    expect(decided).toBeGreaterThan(0);
+  },
+  Math.max(60_000, RUNS * 300),
 );

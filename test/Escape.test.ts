@@ -1,5 +1,7 @@
-import { either, grammar, literal, range, toPattern } from "@ghostry/aster";
+import { either, grammar, initialize, literal, range } from "@ghostry/aster";
 import { attest, describe, expect, test } from ".";
+
+const { toPattern } = initialize();
 
 /**
  * The escaper is exercised through the public emitter, because it is what

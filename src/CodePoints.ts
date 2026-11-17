@@ -64,3 +64,27 @@ export function contains(set: CodePointSet, point: number): boolean {
   }
   return false;
 }
+
+/**
+ * The code points in both `left` and `right`, by a merge of the two sorted
+ * range lists.
+ */
+export function intersect(
+  left: CodePointSet,
+  right: CodePointSet,
+): CodePointSet {
+  const both: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    const a = left[i];
+    const b = right[j];
+    if (a === undefined || b === undefined) break;
+    const from = Math.max(a[0], b[0]);
+    const to = Math.min(a[1], b[1]);
+    if (from <= to) both.push([from, to]);
+    if (a[1] < b[1]) i += 1;
+    else j += 1;
+  }
+  return both;
+}

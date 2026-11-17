@@ -339,3 +339,129 @@ export type ParseResult<$Node> = ParseSuccess<$Node> | ParseFailure;
  * anchored regex accepts, and picks the derivation that regex would.
  */
 export type Parser<$Node> = (input: string) => ParseResult<$Node>;
+
+/**
+ * Options for `toPattern`, `toRegExp`, and `analyze`.
+ */
+export interface PatternOptions {
+  /**
+   * Whether the pattern must match the whole input: `^(?:…)$`. Defaults to
+   * `true`, which is what the parser accepts and what a JSON Schema `pattern`
+   * needs to mean "is a valid X" rather than "contains a valid X". Set it to
+   * `false` to search for a match inside a longer string. A search retries at
+   * every offset, so it can be slower than the anchored pattern: `a*b` is
+   * linear anchored and quadratic as a search.
+   */
+  readonly anchored?: boolean;
+}
+
+/**
+ * An input that drives a pattern's worst case: `prefix`, then `pump` repeated,
+ * then `suffix`. The suffix is a code point the pattern never accepts, so the
+ * match fails and a backtracking engine tries every path; it is empty only when
+ * the pattern accepts every code point somewhere.
+ */
+export interface Attack {
+  readonly prefix: string;
+  readonly pump: string;
+  readonly suffix: string;
+}
+
+/**
+ * How long a backtracking regex engine can take on a rule's pattern, as a
+ * function of input length, from the static analysis `analyze` runs.
+ *
+ * - `linear`: no input makes the engine try more than a bounded number of paths
+ *   per character.
+ * - `polynomial`: some input makes it take time proportional to `nᵈᵉᵍʳᵉᵉ`.
+ * - `exponential`: some input makes each repetition of `attack.pump` double the
+ *   work.
+ *
+ * `rule` is the innermost named rule containing the ambiguity, which is where
+ * to rewrite. The analysis is conservative: it can report a pattern a real
+ * engine always matches quickly, never the reverse.
+ */
+export type Analysis =
+  | { readonly complexity: "linear" }
+  | {
+      readonly complexity: "polynomial";
+      readonly degree: number;
+      readonly rule: string;
+      readonly attack: Attack;
+    }
+  | {
+      readonly complexity: "exponential";
+      readonly rule: string;
+      readonly attack: Attack;
+    };
+
+/**
+ * A finding: an {@link Analysis} that is not linear.
+ */
+export type Vulnerability = Exclude<
+  Analysis,
+  { readonly complexity: "linear" }
+>;
+
+/**
+ * What `initialize` accepts. Every field is optional.
+ */
+export interface Config {
+  /**
+   * The least complexity at which `toPattern` and `toRegExp` throw
+   * `VulnerablePatternError` instead of returning a pattern that a backtracking
+   * engine can take superlinear time on. Defaults to `"polynomial"`, which
+   * rejects any superlinear pattern. `"exponential"` rejects only exponential
+   * ones, and `"never"` turns the check off. `analyze` reports either way, and
+   * the parser is linear for every grammar.
+   */
+  readonly redos?: "polynomial" | "exponential" | "never";
+}
+
+/**
+ * The functions that consume a grammar, built by `initialize` from a
+ * {@link Config}.
+ */
+export interface Initialized {
+  /**
+   * The pattern source for a rule: anchored unless `anchored: false`, written
+   * for the `v` flag and valid with the same meaning under `u`, so it can serve
+   * as a JSON Schema `pattern`, and free of capturing groups. Throws
+   * `VulnerablePatternError` if the pattern is as slow as `redos` forbids.
+   */
+  toPattern<$Grammar extends Grammar>(
+    grammar: $Grammar,
+    rule: RuleNames<$Grammar>,
+    options?: PatternOptions,
+  ): string;
+
+  /**
+   * `toPattern`, compiled with the `v` flag.
+   */
+  toRegExp<$Grammar extends Grammar>(
+    grammar: $Grammar,
+    rule: RuleNames<$Grammar>,
+    options?: PatternOptions,
+  ): RegExp;
+
+  /**
+   * A parser for a rule. It accepts exactly the strings `toRegExp` accepts,
+   * returns the derivation JS regex backtracking would pick, and runs in time
+   * linear in the input for every grammar, including ones whose pattern
+   * `toRegExp` refuses.
+   */
+  toParser<$Grammar extends Grammar, $Name extends RuleNames<$Grammar>>(
+    grammar: $Grammar,
+    rule: $Name,
+  ): Parser<AstOf<$Grammar, $Name>>;
+
+  /**
+   * How long a backtracking engine can take on the rule's pattern, with an
+   * attack string when it is superlinear. Never throws for a slow pattern.
+   */
+  analyze<$Grammar extends Grammar>(
+    grammar: $Grammar,
+    rule: RuleNames<$Grammar>,
+    options?: PatternOptions,
+  ): Analysis;
+}

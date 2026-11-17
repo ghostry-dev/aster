@@ -1,12 +1,12 @@
 import {
   either,
   grammar,
+  initialize,
   literal,
   oneOrMore,
   optional,
   range,
   sequence,
-  toParser,
   zeroOrMore,
   type AstOf,
   type Grammar as AnyGrammar,
@@ -15,6 +15,8 @@ import {
   type RuleNames,
   type RuleRef,
 } from "@ghostry/aster";
+
+const { toParser } = initialize();
 
 /**
  * Compile-time assertions. `Equal` compares through deferred generic

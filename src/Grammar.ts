@@ -7,6 +7,7 @@ import type {
   RuleRef,
   Vocabulary,
 } from "./Types";
+import { fold } from "./Walk";
 
 /**
  * Start a grammar. Rules are added with `.define()` and the grammar is finished
@@ -34,10 +35,14 @@ function builder<$Rules extends RuleDefinition>(
     define(name, build) {
       if (nullable.has(name)) throw new AsterError.DuplicateRuleError(name);
       const body: Expr = build(references(rules) as Vocabulary<$Rules>);
-      const definition: RuleDefinition = Object.freeze({ name, body });
+      const isNullable = check(name, body, nullable);
+      const definition: RuleDefinition = Object.freeze({
+        name,
+        body: freeze(body),
+      });
       return builder(
         [...rules, definition],
-        new Map(nullable).set(name, check(name, body, nullable)),
+        new Map(nullable).set(name, isNullable),
       );
     },
     compose() {
@@ -63,4 +68,22 @@ function references(rules: readonly RuleDefinition[]): Vocabulary {
     });
   }
   return Object.freeze(vocabulary);
+}
+
+/**
+ * Freeze a checked body and everything in it. Combinators already return frozen
+ * nodes, but a body built by hand need not be, and a composed grammar is frozen
+ * all the way down: that is what lets `initialize`'s functions cache an
+ * analysis per grammar.
+ */
+function freeze(body: Expr): Expr {
+  return fold<Expr>(
+    body,
+    () => {},
+    (expr) => {
+      if (expr.kind === "sequence") Object.freeze(expr.items);
+      if (expr.kind === "either") Object.freeze(expr.alternatives);
+      return Object.freeze(expr);
+    },
+  );
 }

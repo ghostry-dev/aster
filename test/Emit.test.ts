@@ -2,14 +2,13 @@ import {
   AsterError,
   either,
   grammar,
+  initialize,
   literal,
   oneOrMore,
   optional,
   range,
   repeat,
   sequence,
-  toPattern,
-  toRegExp,
   zeroOrMore,
   type Grammar,
   type RuleNames,
@@ -17,6 +16,8 @@ import {
 import { attest, describe, expect, test } from ".";
 import { deep } from "./fixtures/deep";
 import { realistic } from "./stress/Realistic";
+
+const { toPattern, toRegExp } = initialize();
 
 const shapes = grammar()
   .define("digit", () => range("0", "9"))

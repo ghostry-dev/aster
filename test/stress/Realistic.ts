@@ -67,7 +67,21 @@ export const realistic = grammar()
   .define("alnumId", ({ alpha, digit, dash }) =>
     oneOrMore(either(alpha, digit, dash)),
   )
-  .define("preId", ({ numericId, alnumId }) => either(numericId, alnumId))
+  /**
+   * At least one non-digit, so no identifier is both numeric and alphanumeric.
+   * Overlapping alternatives inside the `(?:\.id)*` loop would let a
+   * backtracking engine split `.1.1.1…` exponentially many ways.
+   */
+  .define("alphanumericId", ({ digit, alpha, dash }) =>
+    sequence([
+      zeroOrMore(digit),
+      either(alpha, dash),
+      zeroOrMore(either(alpha, digit, dash)),
+    ]),
+  )
+  .define("preId", ({ numericId, alphanumericId }) =>
+    either(numericId, alphanumericId),
+  )
   .define("prerelease", ({ dash, preId, dot }) =>
     sequence([dash, preId, zeroOrMore(sequence([dot, preId]))]),
   )
@@ -164,7 +178,13 @@ export const realistic = grammar()
   )
   .define("field", ({ word }) => sequence([word, literal("="), word]))
   .define("fields", ({ space, field }) => zeroOrMore(sequence([space, field])))
-  .define("message", ({ word, space }) => zeroOrMore(either(word, space)))
+  /**
+   * Words separated by single spaces. `(?:word| )*` would be `(?:\w+| )*`,
+   * which a backtracking engine splits exponentially many ways.
+   */
+  .define("message", ({ word, space }) =>
+    optional(sequence([word, zeroOrMore(sequence([space, word]))])),
+  )
   .define(
     "logLine",
     ({ timestamp, space, level, ipv4, uri, semver, fields, message }) =>

@@ -3,13 +3,13 @@ import { run } from "#internal/VM";
 import {
   either,
   grammar,
+  initialize,
   literal,
   oneOrMore,
   optional,
   range,
   repeat,
   sequence,
-  toRegExp,
   zeroOrMore,
   type Grammar,
   type RuleNames,
@@ -20,6 +20,8 @@ import { backtrack, furthest } from "./fixtures/backtrack";
 import { deep } from "./fixtures/deep";
 import { nearMisses, strings } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
+
+const { toRegExp } = initialize();
 
 type Realistic = RuleNames<typeof realistic>;
 
@@ -44,7 +46,7 @@ describe("the VM picks the derivation backtracking picks", () => {
     ["semver", "1.0.0"],
     ["semver", "10.20.30-alpha.1+build.5"],
     ["semver", "0.0.0-0"],
-    ["semver", "1.0.0-0a.00.x-y"],
+    ["semver", "1.0.0-0a.10.x-y"],
     ["ipv4", "192.168.0.1"],
     ["ipv4", "255.255.255.255"],
     ["uri", "https://example.com/a/b?q=1#top"],

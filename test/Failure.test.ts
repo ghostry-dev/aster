@@ -1,11 +1,11 @@
 import {
   either,
   grammar,
+  initialize,
   literal,
   oneOrMore,
   range,
   sequence,
-  toParser,
   zeroOrMore,
   type Expectation,
   type ParseFailure,
@@ -13,6 +13,8 @@ import {
 } from "@ghostry/aster";
 import { describe, expect, test } from ".";
 import { realistic } from "./stress/Realistic";
+
+const { toParser } = initialize();
 
 function rejected<$Node>(result: ParseResult<$Node>): ParseFailure {
   if (result.ok) throw new Error("the input was accepted");

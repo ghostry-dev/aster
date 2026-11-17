@@ -1,6 +1,6 @@
 /**
  * Every error this library throws is a named subclass of {@link AsterError},
- * kept in one dependency-free module: `instanceof AsterError` catches
+ * kept in one module with no runtime imports: `instanceof AsterError` catches
  * everything the library raises.
  *
  * Context is `public readonly` constructor parameters, but the message still
@@ -15,6 +15,8 @@
  *
  * @module
  */
+
+import type { Vulnerability } from "./Types";
 
 /**
  * Base error class from which more specific errors inherit.
@@ -212,6 +214,67 @@ export namespace AsterError {
             + `string. Make the repeated expression always consume at least `
             + `one character, for example by moving an optional() outside the `
             + `repetition.`;
+    }
+  }
+
+  /**
+   * Thrown by `toPattern` and `toRegExp` when the analysis finds the rule's
+   * pattern can take superlinear time in a backtracking regex engine, at or
+   * above the complexity `initialize({ redos })` rejects (any superlinear
+   * pattern, by default).
+   */
+  export class VulnerablePatternError extends AsterError {
+    constructor(
+      /**
+       * The rule whose pattern was asked for.
+       */
+      public readonly rule: string,
+      /**
+       * What the analysis found, with an input that shows it.
+       */
+      public readonly analysis: Vulnerability,
+    ) {
+      super();
+      this.name = "@ghostry/aster:VulnerablePatternError";
+      const growth =
+        analysis.complexity === "exponential"
+          ? "exponential time"
+          : `time proportional to the input length to the power ${analysis.degree}`;
+      const where =
+        analysis.rule === rule
+          ? ""
+          : ` The ambiguity is in rule "${analysis.rule}".`;
+      this.message =
+        `The pattern for rule "${rule}" can take ${growth} in a backtracking `
+        + `regex engine: input can match it in many ways, and the engine tries `
+        + `them all before failing, as on ${JSON.stringify(analysis.attack.prefix)} `
+        + `+ ${JSON.stringify(analysis.attack.pump)} repeated + `
+        + `${JSON.stringify(analysis.attack.suffix)}.${where} Parse untrusted `
+        + `input with toParser(), which is linear for every grammar; or rewrite `
+        + `the rule so no input matches it more than one way; or pass a `
+        + `different \`redos\` to initialize() to allow it.`;
+    }
+  }
+
+  /**
+   * Thrown by `initialize` when an option has a value it does not accept. A
+   * misspelled setting is an error rather than a fallback to the default, or to
+   * no setting at all, so a typo cannot silently turn a check off.
+   */
+  export class InvalidConfigError extends AsterError {
+    constructor(
+      /**
+       * The option.
+       */
+      public readonly option: string,
+      /**
+       * The value it was given.
+       */
+      public readonly value: unknown,
+    ) {
+      super();
+      this.name = "@ghostry/aster:InvalidConfigError";
+      this.message = `initialize() does not accept ${JSON.stringify(value) ?? String(value)} for "${option}".`;
     }
   }
 

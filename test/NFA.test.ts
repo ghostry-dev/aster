@@ -3,12 +3,12 @@ import {
   AsterError,
   either,
   grammar,
+  initialize,
   literal,
   optional,
   range,
   repeat,
   sequence,
-  toRegExp,
   zeroOrMore,
   type Grammar,
   type RuleNames,
@@ -18,6 +18,8 @@ import { backtrack, marks, type Event } from "./fixtures/backtrack";
 import { deep } from "./fixtures/deep";
 import { nearMisses } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
+
+const { toRegExp } = initialize();
 
 type Realistic = RuleNames<typeof realistic>;
 

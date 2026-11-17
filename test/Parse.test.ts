@@ -2,13 +2,12 @@ import {
   AsterError,
   either,
   grammar,
+  initialize,
   literal,
   oneOrMore,
   optional,
   range,
   sequence,
-  toParser,
-  toRegExp,
   zeroOrMore,
   type AstOf,
   type Grammar,
@@ -21,6 +20,8 @@ import { attest, describe, expect, test } from ".";
 import { deep } from "./fixtures/deep";
 import { nearMisses } from "./fixtures/inputs";
 import { realistic } from "./stress/Realistic";
+
+const { toRegExp, toParser } = initialize();
 
 type Realistic = RuleNames<typeof realistic>;
 type AnyNode = Node<string, unknown>;
