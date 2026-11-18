@@ -2,7 +2,7 @@ import { escapeInside, escapeOutside } from "#internal/Escape";
 import { fold } from "#internal/Walk";
 import type { Grammar, Node } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
-import type { Random } from "./random";
+import type { Random } from "./random.ts";
 
 /**
  * Characters every random grammar draws from, and a pool of awkward ones it

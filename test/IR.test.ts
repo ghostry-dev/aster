@@ -10,7 +10,7 @@ import {
   zeroOrMore,
 } from "@ghostry/aster";
 import { subexpressions, type Expr } from "@ghostry/aster/unstable-ir";
-import { expect, test } from ".";
+import { expect, test } from "./index.ts";
 
 const every = grammar()
   .define("digit", () => range("0", "9"))

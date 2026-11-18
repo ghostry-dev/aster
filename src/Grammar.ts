@@ -1,13 +1,13 @@
-import { check } from "./Check";
-import { AsterError } from "./Error";
+import { check } from "./Check.ts";
+import { AsterError } from "./Error.ts";
 import type {
   Expr,
   GrammarBuilder,
   RuleDefinition,
   RuleRef,
   Vocabulary,
-} from "./Types";
-import { fold } from "./Walk";
+} from "./Types.ts";
+import { fold } from "./Walk.ts";
 
 /**
  * Start a grammar. Rules are added with `.define()` and the grammar is finished

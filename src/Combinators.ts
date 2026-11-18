@@ -14,7 +14,7 @@ import type {
   Range,
   Repeat,
   Sequence,
-} from "./Types";
+} from "./Types.ts";
 
 /**
  * Match `value` exactly.

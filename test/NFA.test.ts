@@ -13,11 +13,11 @@ import {
   type Grammar,
   type RuleNames,
 } from "@ghostry/aster";
-import { attest, describe, expect, test } from ".";
-import { backtrack, marks, type Event } from "./fixtures/backtrack";
-import { deep } from "./fixtures/deep";
-import { nearMisses } from "./fixtures/inputs";
-import { realistic } from "./stress/Realistic";
+import { attest, describe, expect, test } from "./index.ts";
+import { backtrack, marks, type Event } from "./fixtures/backtrack.ts";
+import { deep } from "./fixtures/deep.ts";
+import { nearMisses } from "./fixtures/inputs.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { toRegExp } = initialize();
 

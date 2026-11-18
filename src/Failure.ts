@@ -1,5 +1,5 @@
-import { Source, SourceSpan } from "./Source";
-import type { Expectation, ParseFailure } from "./Types";
+import { Source, SourceSpan } from "./Source.ts";
+import type { Expectation, ParseFailure } from "./Types.ts";
 
 /**
  * The result for an input that did not match, failing at `offset` with what the

@@ -1,5 +1,5 @@
-import { subexpressions } from "./IR";
-import type { Expr } from "./Types";
+import { subexpressions } from "./IR/index.ts";
+import type { Expr } from "./Types.ts";
 
 /**
  * One node on the explicit walk stack, with the index of the next subexpression

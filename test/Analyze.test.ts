@@ -17,9 +17,9 @@ import {
 } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
 import { checkSync } from "recheck";
-import { attest, describe, expect, test } from ".";
-import { deep } from "./fixtures/deep";
-import { realistic } from "./stress/Realistic";
+import { attest, describe, expect, test } from "./index.ts";
+import { deep } from "./fixtures/deep.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { analyze, toPattern, toRegExp, toParser } = initialize({
   allowedComplexity: "exponential",

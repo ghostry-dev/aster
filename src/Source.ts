@@ -1,4 +1,4 @@
-import type { Position, Span } from "./Types";
+import type { Position, Span } from "./Types.ts";
 
 /**
  * One parse's input, shared by every node and span of that parse. The index of

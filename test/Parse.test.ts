@@ -16,10 +16,10 @@ import {
   type ParseResult,
   type RuleNames,
 } from "@ghostry/aster";
-import { attest, describe, expect, test } from ".";
-import { deep } from "./fixtures/deep";
-import { nearMisses } from "./fixtures/inputs";
-import { realistic } from "./stress/Realistic";
+import { attest, describe, expect, test } from "./index.ts";
+import { deep } from "./fixtures/deep.ts";
+import { nearMisses } from "./fixtures/inputs.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { toRegExp, toParser } = initialize();
 

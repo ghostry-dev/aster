@@ -1,5 +1,5 @@
 import { either, grammar, initialize, literal, range } from "@ghostry/aster";
-import { attest, describe, expect, test } from ".";
+import { attest, describe, expect, test } from "./index.ts";
 
 const { toPattern } = initialize();
 

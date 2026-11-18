@@ -1,6 +1,6 @@
-import { contains, merge } from "./CodePoints";
-import type { Mark, Program } from "./NFA";
-import type { Expectation } from "./Types";
+import { contains, merge } from "./CodePoints.ts";
+import type { Mark, Program } from "./NFA.ts";
+import type { Expectation } from "./Types.ts";
 
 /**
  * A mark on the winning path, with the UTF-16 offset where it was passed.

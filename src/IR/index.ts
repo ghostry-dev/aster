@@ -25,7 +25,7 @@
  * @module
  */
 
-import type { Expr } from "../Types";
+import type { Expr } from "../Types.ts";
 
 export type {
   Either,
@@ -38,7 +38,7 @@ export type {
   RuleDefinition,
   RuleRef,
   Sequence,
-} from "../Types";
+} from "../Types.ts";
 
 /**
  * Every node kind.

@@ -15,7 +15,7 @@
  * builder receives references to the earlier rules only. Builders are
  * immutable, so chains can branch from a shared prefix.
  */
-export { grammar } from "./Grammar";
+export { grammar } from "./Grammar.ts";
 
 /**
  * The combinators a rule body is built from. Each returns frozen plain data.
@@ -33,7 +33,7 @@ export {
   repeat,
   sequence,
   zeroOrMore,
-} from "./Combinators";
+} from "./Combinators.ts";
 
 /**
  * Build the functions that consume a grammar: `toPattern`, `toRegExp`,
@@ -54,7 +54,7 @@ export {
  * input that does not match: the furthest offset any derivation reached, what
  * was expected there, and a message with its line and column.
  */
-export { initialize } from "./Initialize";
+export { initialize } from "./Initialize.ts";
 
 /**
  * `AsterError` is the base, and `instanceof AsterError` catches everything the
@@ -68,7 +68,7 @@ export { initialize } from "./Initialize";
  * throw `UnknownRuleError`, plus any of those for a grammar that arrived as
  * data.
  */
-export { AsterError } from "./Error";
+export { AsterError } from "./Error.ts";
 
 /**
  * The expression types are what the combinators return, exported so inferred
@@ -118,4 +118,4 @@ export type {
   Span,
   Vocabulary,
   Vulnerability,
-} from "./Types";
+} from "./Types.ts";

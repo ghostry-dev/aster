@@ -1,8 +1,8 @@
-import { codePoint } from "./CodePoints";
-import { AsterError } from "./Error";
-import type { Kind } from "./IR";
-import type { Expr, RuleDefinition } from "./Types";
-import { fold } from "./Walk";
+import { codePoint } from "./CodePoints.ts";
+import { AsterError } from "./Error.ts";
+import type { Kind } from "./IR/index.ts";
+import type { Expr, RuleDefinition } from "./Types.ts";
+import { fold } from "./Walk.ts";
 
 /**
  * Every kind, as an object rather than an array so that adding a kind to the

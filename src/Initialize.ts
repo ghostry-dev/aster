@@ -1,8 +1,8 @@
-import { analyze } from "./Analyze";
-import { anchor, emit, type Fragment } from "./Emit";
-import { AsterError } from "./Error";
-import { toParser } from "./Parse";
-import type { Analysis, Config, Grammar, Initialized } from "./Types";
+import { analyze } from "./Analyze.ts";
+import { anchor, emit, type Fragment } from "./Emit.ts";
+import { AsterError } from "./Error.ts";
+import { toParser } from "./Parse.ts";
+import type { Analysis, Config, Grammar, Initialized } from "./Types.ts";
 
 /**
  * How severe each complexity is. A pattern is rejected when it is more severe

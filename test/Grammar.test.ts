@@ -10,7 +10,7 @@ import {
   zeroOrMore,
   type Vocabulary,
 } from "@ghostry/aster";
-import { attest, expect, test } from ".";
+import { attest, expect, test } from "./index.ts";
 
 test("rules are stored in definition order as name-referenced plain data", () => {
   const composed = grammar()

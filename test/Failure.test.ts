@@ -11,8 +11,8 @@ import {
   type ParseFailure,
   type ParseResult,
 } from "@ghostry/aster";
-import { describe, expect, test } from ".";
-import { realistic } from "./stress/Realistic";
+import { describe, expect, test } from "./index.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { toParser } = initialize();
 

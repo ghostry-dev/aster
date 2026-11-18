@@ -1,8 +1,8 @@
-import { checkThrough } from "./Check";
-import { codePoint, codePoints, type CodePointSet } from "./CodePoints";
-import { AsterError } from "./Error";
-import type { Expr, Grammar } from "./Types";
-import { fold } from "./Walk";
+import { checkThrough } from "./Check.ts";
+import { codePoint, codePoints, type CodePointSet } from "./CodePoints.ts";
+import { AsterError } from "./Error.ts";
+import type { Expr, Grammar } from "./Types.ts";
+import { fold } from "./Walk.ts";
 
 /**
  * Something the parser records when a thread passes a `mark` instruction. The

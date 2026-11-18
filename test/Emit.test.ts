@@ -13,9 +13,9 @@ import {
   type Grammar,
   type RuleNames,
 } from "@ghostry/aster";
-import { attest, describe, expect, test } from ".";
-import { deep } from "./fixtures/deep";
-import { realistic } from "./stress/Realistic";
+import { attest, describe, expect, test } from "./index.ts";
+import { deep } from "./fixtures/deep.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { toPattern, toRegExp } = initialize();
 

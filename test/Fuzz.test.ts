@@ -1,17 +1,17 @@
 import { AsterError, initialize, type Grammar } from "@ghostry/aster";
 import { compile, type Program } from "#internal/NFA";
 import { checkSync } from "recheck";
-import { expect, test } from ".";
-import { furthest } from "./fixtures/backtrack";
+import { expect, test } from "./index.ts";
+import { furthest } from "./fixtures/backtrack.ts";
 import {
   capturing,
   captured,
   derived,
   randomGrammar,
   sample,
-} from "./fixtures/fuzz";
-import { nearMisses, strings } from "./fixtures/inputs";
-import { Random } from "./fixtures/random";
+} from "./fixtures/fuzz.ts";
+import { nearMisses, strings } from "./fixtures/inputs.ts";
+import { Random } from "./fixtures/random.ts";
 
 const { analyze, toPattern, toRegExp, toParser } = initialize({
   allowedComplexity: "exponential",

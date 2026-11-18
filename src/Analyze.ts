@@ -1,6 +1,6 @@
-import { contains, intersect, merge, type CodePointSet } from "./CodePoints";
-import type { Regex } from "./Emit";
-import type { Analysis, Attack } from "./Types";
+import { contains, intersect, merge, type CodePointSet } from "./CodePoints.ts";
+import type { Regex } from "./Emit.ts";
+import type { Analysis, Attack } from "./Types.ts";
 
 /**
  * Static ReDoS analysis of an emitted pattern: how many ways a backtracking

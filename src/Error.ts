@@ -16,7 +16,7 @@
  * @module
  */
 
-import type { Vulnerability } from "./Types";
+import type { Vulnerability } from "./Types.ts";
 
 /**
  * Base error class from which more specific errors inherit.

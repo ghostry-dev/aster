@@ -15,11 +15,11 @@ import {
   type RuleNames,
 } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
-import { describe, expect, test } from ".";
-import { backtrack, furthest } from "./fixtures/backtrack";
-import { deep } from "./fixtures/deep";
-import { nearMisses, strings } from "./fixtures/inputs";
-import { realistic } from "./stress/Realistic";
+import { describe, expect, test } from "./index.ts";
+import { backtrack, furthest } from "./fixtures/backtrack.ts";
+import { deep } from "./fixtures/deep.ts";
+import { nearMisses, strings } from "./fixtures/inputs.ts";
+import { realistic } from "./stress/Realistic.ts";
 
 const { toRegExp } = initialize();
 

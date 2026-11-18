@@ -1,6 +1,6 @@
-import { failure } from "./Failure";
-import { compile } from "./NFA";
-import { Source, SourceSpan } from "./Source";
+import { failure } from "./Failure.ts";
+import { compile } from "./NFA.ts";
+import { Source, SourceSpan } from "./Source.ts";
 import type {
   AstOf,
   Either,
@@ -13,9 +13,9 @@ import type {
   RuleNames,
   Sequence,
   Span,
-} from "./Types";
-import { run, type Event } from "./VM";
-import { fold } from "./Walk";
+} from "./Types.ts";
+import { run, type Event } from "./VM.ts";
+import { fold } from "./Walk.ts";
 
 /**
  * Compile a parser for `rule`. It accepts exactly the strings

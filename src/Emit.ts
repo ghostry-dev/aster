@@ -1,9 +1,14 @@
-import { checkThrough } from "./Check";
-import { codePoint, codePoints, merge, type CodePointSet } from "./CodePoints";
-import { AsterError } from "./Error";
-import { escapeInside, escapeOutside } from "./Escape";
-import type { Expr, Grammar, PatternOptions } from "./Types";
-import { fold } from "./Walk";
+import { checkThrough } from "./Check.ts";
+import {
+  codePoint,
+  codePoints,
+  merge,
+  type CodePointSet,
+} from "./CodePoints.ts";
+import { AsterError } from "./Error.ts";
+import { escapeInside, escapeOutside } from "./Escape.ts";
+import type { Expr, Grammar, PatternOptions } from "./Types.ts";
+import { fold } from "./Walk.ts";
 
 /**
  * How tightly an emitted fragment binds, loosest last. A context that needs a

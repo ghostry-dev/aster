@@ -11,8 +11,8 @@ import {
   zeroOrMore,
 } from "@ghostry/aster";
 import type { Expr } from "@ghostry/aster/unstable-ir";
-import { attest, describe, expect, test } from ".";
-import { deep } from "./fixtures/deep";
+import { attest, describe, expect, test } from "./index.ts";
+import { deep } from "./fixtures/deep.ts";
 
 const base = grammar()
   .define("digit", () => range("0", "9"))
