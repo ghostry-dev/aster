@@ -43,7 +43,8 @@ export function sequence<const $Items extends readonly Expr[]>(
 }
 
 /**
- * Match the first alternative, in order, that leads to an overall match.
+ * Match any one alternative. Where several lead to a match, the earliest is
+ * preferred: the parser returns that derivation, as JS regex would.
  */
 export function either<const $Alternatives extends readonly [Expr, ...Expr[]]>(
   ...alternatives: $Alternatives

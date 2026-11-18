@@ -256,7 +256,7 @@ export namespace AsterError {
         + (analysis.exact
           ? ""
           : ` The pattern was too large to analyze exactly within `
-            + `\`analysisBudget\`, so this ignores match priority and may `
+            + `\`analysisBudget\`, so this assumes every path fails and may `
             + `report a pattern a real engine matches quickly; a larger `
             + `budget gives an exact answer.`);
     }

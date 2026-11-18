@@ -58,7 +58,7 @@ describe("what was expected", () => {
     expect(failure.message).toBe(message);
   });
 
-  test("alternatives are listed in priority order, without duplicates", () => {
+  test("alternatives are listed in preference order, without duplicates", () => {
     const parse = toParser(realistic, "timestamp");
     expect(rejected(parse("2026-11-15T09:30:00")).message).toBe(
       "Expected fraction or offset at 1:20, found end of input.",

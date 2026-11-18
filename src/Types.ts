@@ -33,9 +33,10 @@ export interface Sequence<$Items extends readonly Expr[] = readonly Expr[]> {
 }
 
 /**
- * The first alternative that leads to a match, in JS regex priority order. Its
- * children record which alternative matched, since two alternatives with the
- * same child type could not otherwise be told apart.
+ * Any alternative that leads to a match. Where several do, the earliest is
+ * preferred, as in JS regex. Its children record which alternative matched,
+ * since two alternatives with the same child type could not otherwise be told
+ * apart.
  */
 export interface Either<
   $Alternatives extends readonly Expr[] = readonly Expr[],
@@ -334,9 +335,9 @@ export type Expectation =
  * A failed parse, reported at the furthest offset any derivation reached.
  *
  * `span` starts there and covers the code point found, so it is empty when the
- * input ran out. `expected` lists what could have come next, in priority order,
- * without duplicates. `message` says the same for a person, with a 1-based line
- * and a column counted in code points.
+ * input ran out. `expected` lists what could have come next, in the order the
+ * grammar prefers them, without duplicates. `message` says the same for a
+ * person, with a 1-based line and a column counted in code points.
  */
 export interface ParseFailure {
   readonly ok: false;
@@ -394,13 +395,13 @@ export interface Attack {
  *   work.
  *
  * `rule` is the innermost named rule containing the ambiguity, which is where
- * to rewrite. `exact` says whether the finding accounts for match priority: a
- * search stops at its first match, so an ambiguity costs time only where every
- * path through it fails. An exact finding is what a backtracking engine does.
- * One that is not, because the pattern was too large to analyze exactly within
- * `analysisBudget`, ignores priority: it never misses a slow pattern, but it
- * can report one a real engine always matches quickly. A linear verdict is
- * always exact.
+ * to rewrite. `exact` says whether the finding accounts for the engine stopping
+ * at the first match it finds: a search stops there, so an ambiguity costs time
+ * only where every path through it fails. An exact finding is what a
+ * backtracking engine does. One that is not, because the pattern was too large
+ * to analyze exactly within `analysisBudget`, assumes every path fails: it
+ * never misses a slow pattern, but it can report one a real engine always
+ * matches quickly. A linear verdict is always exact.
  */
 export type Analysis =
   | { readonly complexity: "linear" }
@@ -441,14 +442,14 @@ export interface Config {
   readonly allowedComplexity?: "linear" | "polynomial" | "exponential";
 
   /**
-   * How many steps the analysis may take to account for match priority, after a
-   * priority-free pass finds a pattern superlinear. The exact pass can need
-   * exponentially many steps in the size of the pattern, as for
-   * `(?:a[ab]{20}a|a|b)*`, where what succeeds depends on which of the next 20
-   * characters are `a`. Past the budget the priority-free finding stands, with
-   * `exact: false`, which may over-report but never misses a slow pattern.
-   * Defaults to 1,000,000, about half a second when it runs out. `0` skips the
-   * exact pass, and `Infinity` never falls back.
+   * How many steps the analysis may take to account for the engine stopping at
+   * its first match, after a pass that assumes every path fails finds a pattern
+   * superlinear. The exact pass can need exponentially many steps in the size
+   * of the pattern, as for `(?:a[ab]{20}a|a|b)*`, where what succeeds depends
+   * on which of the next 20 characters are `a`. Past the budget that pass's
+   * finding stands, with `exact: false`, which may over-report but never misses
+   * a slow pattern. Defaults to 1,000,000, about half a second when it runs
+   * out. `0` skips the exact pass, and `Infinity` never falls back.
    */
   readonly analysisBudget?: number;
 }

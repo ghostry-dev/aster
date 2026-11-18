@@ -167,16 +167,16 @@ analyze(words, "text");
 // { complexity: "exponential", rule: "text", attack: { prefix: "a", pump: "aa", suffix: "!" }, exact: true }
 ```
 
-`analyze` reports how slow a pattern can be, and an input that shows it, without throwing. The parser runs in linear time for every grammar, so it is the safe way to read untrusted input whatever the analysis says. To accept slower patterns, configure the instance: `initialize({ allowedComplexity: "polynomial" })` allows polynomial ones, and `initialize({ allowedComplexity: "exponential" })` allows everything. The analysis accounts for match priority, so it is exact for a backtracking engine: a search (`anchored: false`) stops at its first match, so `text` above is linear as a search. For a pattern too large to analyze exactly within `analysisBudget`, it falls back to an answer that ignores priority and says so with `exact: false`. That answer never misses a slow pattern, but it can flag one a real engine finishes quickly.
+`analyze` reports how slow a pattern can be, and an input that shows it, without throwing. The parser runs in linear time for every grammar, so it is the safe way to read untrusted input whatever the analysis says. To accept slower patterns, configure the instance: `initialize({ allowedComplexity: "polynomial" })` allows polynomial ones, and `initialize({ allowedComplexity: "exponential" })` allows everything. The analysis accounts for the engine stopping at the first match it finds, so it is exact for a backtracking engine: a search (`anchored: false`) stops at its first match, so `text` above is linear as a search. For a pattern too large to analyze exactly within `analysisBudget`, it falls back to an answer that assumes every path fails and says so with `exact: false`. That answer never misses a slow pattern, but it can flag one a real engine finishes quickly.
 
 ## Configuration
 
 `initialize(config)` builds `toPattern`, `toRegExp`, `toParser`, and `analyze` from a config. Every field is optional, and an unknown value throws `InvalidConfigError` rather than falling back to a default, so a typo cannot turn the check off.
 
-| field               | default     | meaning                                                                                                                             |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `allowedComplexity` | `"linear"`  | The slowest pattern `toPattern` and `toRegExp` return: `"linear"`, `"polynomial"`, or `"exponential"`, which allows everything.     |
-| `analysisBudget`    | `1_000_000` | Steps the analysis may spend on match priority before falling back to `exact: false`. `0` always falls back; `Infinity` never does. |
+| field               | default     | meaning                                                                                                                                     |
+| ------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allowedComplexity` | `"linear"`  | The slowest pattern `toPattern` and `toRegExp` return: `"linear"`, `"polynomial"`, or `"exponential"`, which allows everything.             |
+| `analysisBudget`    | `1_000_000` | Steps the analysis may spend on where the engine stops before falling back to `exact: false`. `0` always falls back; `Infinity` never does. |
 
 ## Errors
 
