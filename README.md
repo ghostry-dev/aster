@@ -138,7 +138,7 @@ if (!failure.ok) {
 }
 ```
 
-Span offsets are UTF-16 offsets, so `input.slice(span.start, span.end)` is the matched text. `span.position()` gives the start's 1-based line and column, with columns counted in code points and lines ending at `\n`, `\r\n`, or `\r`. It is computed only when asked for.
+Span offsets are UTF-16 offsets, so `input.slice(span.start, span.end)` is the matched text. `span.position()` gives both ends as `{ start: { line, column }, end: { line, column } }`: 1-based lines, ending at `\n`, `\r\n`, or `\r`, and 1-based columns counted in code points. Like the offset, `end` is just past the last code point, so a span that ends with a line break ends at column 1 of the next line. Positions are computed only when asked for.
 
 The parser matches whole inputs only. To find matches inside a longer string, use the regex with `anchored: false`.
 

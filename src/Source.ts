@@ -1,4 +1,4 @@
-import type { Span } from "./Types";
+import type { Position, Span } from "./Types";
 
 /**
  * One parse's input, shared by every node and span of that parse. The index of
@@ -15,7 +15,7 @@ export class Source {
    * or a lone `\r`. Columns count code points, which is how a person reads a
    * line, so an astral character is one column.
    */
-  position(offset: number): { line: number; column: number } {
+  position(offset: number): Position {
     this.#lines ??= lineStarts(this.input);
     const lines = this.#lines;
     let low = 0;
@@ -62,7 +62,10 @@ export class SourceSpan implements Span {
     this.#source = source;
   }
 
-  position(): { line: number; column: number } {
-    return this.#source.position(this.start);
+  position(): { readonly start: Position; readonly end: Position } {
+    return {
+      start: this.#source.position(this.start),
+      end: this.#source.position(this.end),
+    };
   }
 }

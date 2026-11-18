@@ -247,24 +247,45 @@ describe("positions", () => {
     .compose();
   const parse = toParser(composed, "lines");
 
+  const at = (line: number, column: number) => ({ line, column });
+
   test("are 1-based, and columns count code points", () => {
     const node = parsed(parse("ab\n😀cd\r\nef\rg"));
     const words = nodes(node)
       .filter(({ rule }) => rule === "word")
       .map(({ text, span }) => [text, span.position()]);
     expect(words).toEqual([
-      ["ab", { line: 1, column: 1 }],
-      ["😀cd", { line: 2, column: 1 }],
-      ["ef", { line: 3, column: 1 }],
-      ["g", { line: 4, column: 1 }],
+      ["ab", { start: at(1, 1), end: at(1, 3) }],
+      ["😀cd", { start: at(2, 1), end: at(2, 4) }],
+      ["ef", { start: at(3, 1), end: at(3, 3) }],
+      ["g", { start: at(4, 1), end: at(4, 2) }],
     ]);
     const chars = nodes(node)
       .filter(({ rule }) => rule === "char")
-      .map(
-        ({ text, span }) =>
-          `${text}@${Object.values(span.position()).join(":")}`,
-      );
-    expect(chars.slice(2, 5)).toEqual(["😀@2:1", "c@2:2", "d@2:3"]);
+      .map(({ text, span }) => {
+        const { start, end } = span.position();
+        return `${text}@${start.line}:${start.column}-${end.line}:${end.column}`;
+      });
+    expect(chars.slice(2, 5)).toEqual(["😀@2:1-2:2", "c@2:2-2:3", "d@2:3-2:4"]);
+  });
+
+  test("a span ending with a line break ends at the start of the next line", () => {
+    const node = parsed(parse("ab\n😀cd\r\nef\rg"));
+    const breaks = nodes(node)
+      .filter(({ rule }) => rule === "break")
+      .map(({ span }) => span.position());
+    expect(breaks).toEqual([
+      { start: at(1, 3), end: at(2, 1) },
+      { start: at(2, 4), end: at(3, 1) },
+      { start: at(3, 3), end: at(4, 1) },
+    ]);
+  });
+
+  test("the root spans every line", () => {
+    expect(parsed(parse("ab\ncd")).span.position()).toEqual({
+      start: at(1, 1),
+      end: at(2, 3),
+    });
   });
 });
 

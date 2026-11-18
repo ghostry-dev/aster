@@ -129,6 +129,10 @@ describe("where it failed", () => {
   test("the span is empty at the end of the input", () => {
     const failure = rejected(parse("2026-1"));
     expect([failure.span.start, failure.span.end]).toEqual([6, 6]);
+    expect(failure.span.position()).toEqual({
+      start: { line: 1, column: 7 },
+      end: { line: 1, column: 7 },
+    });
   });
 
   test("lines and code point columns", () => {
@@ -140,7 +144,10 @@ describe("where it failed", () => {
       )
       .compose();
     const failure = rejected(toParser(composed, "lines")("ab\n😀😀c?"));
-    expect(failure.span.position()).toEqual({ line: 2, column: 4 });
+    expect(failure.span.position()).toEqual({
+      start: { line: 2, column: 4 },
+      end: { line: 2, column: 5 },
+    });
     expect(failure.message).toBe(
       'Expected letter, "\\n", or end of input at 2:4, found "?".',
     );

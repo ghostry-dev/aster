@@ -82,7 +82,8 @@ export { AsterError } from "./Error";
  * name. Inference runs only when one of them is used, never at each `.define()`
  * link. `Parser` is what `toParser` returns, and `ParseResult` what a parser
  * returns: a `ParseSuccess` holding the root node or a `ParseFailure`, whose
- * `expected` entries are `Expectation`s.
+ * `expected` entries are `Expectation`s. A `Span`'s `position()` gives both
+ * ends as `Position`s.
  */
 export type {
   Analysis,
@@ -105,6 +106,7 @@ export type {
   ParseResult,
   ParseSuccess,
   PatternOptions,
+  Position,
   Range,
   Repeat,
   RuleDefinition,

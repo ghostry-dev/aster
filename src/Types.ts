@@ -173,13 +173,30 @@ export interface Grammar<$Rules extends RuleDefinition = RuleDefinition> {
 }
 
 /**
- * A half-open range in the input. Line and column are code point based and
- * computed on demand, so the common case pays nothing for them.
+ * A place in the input as a person counts it: a 1-based line, ending at `\n`,
+ * `\r\n`, or a lone `\r`, and a 1-based column counted in code points, so an
+ * astral character is one column.
+ */
+export interface Position {
+  readonly line: number;
+  readonly column: number;
+}
+
+/**
+ * A half-open range in the input, as UTF-16 offsets. `position()` gives both
+ * ends as lines and columns, computed on demand, so the common case pays
+ * nothing for them.
  */
 export interface Span {
   readonly start: number;
   readonly end: number;
-  position(): { line: number; column: number };
+
+  /**
+   * Where the span starts and ends. `end` is just past the last code point, as
+   * the offset is, so a span that ends with a line break ends at column 1 of
+   * the next line, and an empty span starts and ends at the same place.
+   */
+  position(): { readonly start: Position; readonly end: Position };
 }
 
 /**
