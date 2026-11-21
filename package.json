@@ -1,6 +1,6 @@
 {
   "name": "@ghostry/aster",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "description": "One grammar, two outputs: a RegExp for validation and a parser that returns a typed AST.",
   "keywords": [
