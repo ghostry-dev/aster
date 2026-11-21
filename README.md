@@ -1,5 +1,7 @@
 <div align="center">
 
+<picture><img src="https://docs.ghostry.dev/logo.png" alt="ghostry" width="96" height="96"></picture>
+
 # @ghostry/aster
 
 **One grammar, two outputs: a `RegExp` for validation and a parser that returns a typed AST.**
@@ -7,21 +9,19 @@
 Define a grammar once. Use the regex where you need a fast yes or no in any engine that reads ECMA-262, such as a JSON Schema `pattern`. Use the parser where you need the structure: every rule as a typed node with source spans, and every loop iteration kept. Both accept exactly the same strings.
 
 [![github](https://img.shields.io/badge/github-ffffff?style=for-the-badge&color=000000&logo=github&logoColor=ffffff)](https://github.com/ghostry-dev/aster)
-[![typescript](https://img.shields.io/badge/typescript-ffffff?style=for-the-badge&color=000000&logo=typescript&logoColor=3178C6)](#)
-[![bun](https://img.shields.io/badge/bun-ffffff?style=for-the-badge&color=000000&logo=bun&logoColor=FBF0DF)](#)
-[![node](https://img.shields.io/badge/node-ffffff?style=for-the-badge&color=000000&logo=nodedotjs&logoColor=5FA04E)](#)
+<picture><img alt="typescript" src="https://img.shields.io/badge/typescript-ffffff?style=for-the-badge&color=000000&logo=typescript&logoColor=3178C6"></picture>
+<picture><img alt="bun" src="https://img.shields.io/badge/bun-ffffff?style=for-the-badge&color=000000&logo=bun&logoColor=FBF0DF"></picture>
+<picture><img alt="node" src="https://img.shields.io/badge/node-ffffff?style=for-the-badge&color=000000&logo=nodedotjs&logoColor=5FA04E"></picture>
 
 </div>
 
 > [!WARNING]
-> Pre-release. Breaking changes can land in any 0.x version.
+> v0 is in active development, and breaking changes occur frequently. Read the [changelog](https://github.com/ghostry-dev/aster/releases) before every update.
 
 ## Install
 
-```sh
-bun add @ghostry/aster
+```bash
 npm install @ghostry/aster
-deno add jsr:@ghostry/aster
 ```
 
 ## Example
@@ -203,4 +203,4 @@ The node types and a walking helper are exported from `@ghostry/aster/unstable-i
 
 ## License
 
-MIT
+[MIT](LICENSE) © Patrick Rebsch
