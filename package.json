@@ -1,8 +1,8 @@
 {
   "name": "@ghostry/aster",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "license": "MIT",
-  "description": "One grammar, two outputs: an ECMA-262 RegExp for validation and a parser that returns a typed AST with source spans.",
+  "description": "One grammar, two outputs: a RegExp for validation and a parser that returns a typed AST.",
   "keywords": [
     "grammar",
     "regex",
@@ -17,7 +17,7 @@
     "type": "git",
     "url": "git+https://github.com/ghostry-dev/aster"
   },
-  "homepage": "https://github.com/ghostry-dev/aster",
+  "homepage": "https://docs.ghostry.dev/aster",
   "bugs": "https://github.com/ghostry-dev/aster/issues",
   "type": "module",
   "sideEffects": false,
