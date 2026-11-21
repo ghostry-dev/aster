@@ -7,11 +7,13 @@
  */
 
 /**
- * An exact string. Its children are the matched text.
+ * An exact string. Its children are the matched text, which is always `value`,
+ * so they are typed as `$Value`: `"-"` for `literal("-")`, and `string` for a
+ * literal built from a value only known at runtime.
  */
-export interface Literal {
+export interface Literal<$Value extends string = string> {
   readonly kind: "literal";
-  readonly value: string;
+  readonly value: $Value;
 }
 
 /**
@@ -248,17 +250,19 @@ export type Children<
   ? unknown
   : $Expr extends RuleRef<infer $Name>
     ? Node<$Name, Children<BodyOf<$Rules, $Name>, $Rules>>
-    : $Expr extends Literal | Range
-      ? string
-      : $Expr extends Sequence<infer $Items>
-        ? { readonly [I in keyof $Items]: Children<$Items[I], $Rules> }
-        : $Expr extends Optional<infer $Body>
-          ? Children<$Body, $Rules> | undefined
-          : $Expr extends Repeat<infer $Body>
-            ? readonly Children<$Body, $Rules>[]
-            : $Expr extends Either<infer $Alternatives>
-              ? Alternative<$Alternatives, $Rules>
-              : never;
+    : $Expr extends Literal<infer $Value>
+      ? $Value
+      : $Expr extends Range
+        ? string
+        : $Expr extends Sequence<infer $Items>
+          ? { readonly [I in keyof $Items]: Children<$Items[I], $Rules> }
+          : $Expr extends Optional<infer $Body>
+            ? Children<$Body, $Rules> | undefined
+            : $Expr extends Repeat<infer $Body>
+              ? readonly Children<$Body, $Rules>[]
+              : $Expr extends Either<infer $Alternatives>
+                ? Alternative<$Alternatives, $Rules>
+                : never;
 
 /**
  * `{ alternative: i, value }` for each alternative `i`, as one union.

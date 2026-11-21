@@ -19,7 +19,9 @@ import type {
 /**
  * Match `value` exactly.
  */
-export function literal(value: string): Literal {
+export function literal<const $Value extends string>(
+  value: $Value,
+): Literal<$Value> {
   return Object.freeze({ kind: "literal", value });
 }
 

@@ -41,6 +41,13 @@ const date = grammar()
   .define("date", ({ year, dash, month, offset }) =>
     sequence([year, dash, month, offset]),
   )
+  .define("time", ({ month }) => sequence([month, literal(":"), month]))
+  .compose();
+
+const runtime: string = "w";
+
+const dynamic = grammar()
+  .define("word", () => literal(runtime))
   .compose();
 
 type Grammar = typeof date;
@@ -60,11 +67,14 @@ export type Assertions = [
       | "digits"
       | "padding"
       | "date"
+      | "time"
     >
   >,
-  /** literal and range → the matched text. */
+  /** a range → the matched text; a literal → its value. */
   Expect<Equal<AstOf<Grammar, "digit">, DigitNode>>,
-  Expect<Equal<AstOf<Grammar, "dash">, Node<"dash", string>>>,
+  Expect<Equal<AstOf<Grammar, "dash">, Node<"dash", "-">>>,
+  /** a literal whose value is only known at runtime → any string. */
+  Expect<Equal<AstOf<typeof dynamic, "word">, Node<"word", string>>>,
   /** sequence → a tuple; a reference → that rule's node. */
   Expect<
     Equal<
@@ -78,9 +88,17 @@ export type Assertions = [
       AstOf<Grammar, "sign">,
       Node<
         "sign",
-        | { readonly alternative: 0; readonly value: string }
-        | { readonly alternative: 1; readonly value: string }
+        | { readonly alternative: 0; readonly value: "+" }
+        | { readonly alternative: 1; readonly value: "-" }
       >
+    >
+  >,
+  /** an either of literals → their union, narrowed by the index. */
+  Expect<Equal<AstOf<Grammar, "sign">["children"]["value"], "+" | "-">>,
+  Expect<
+    Equal<
+      Extract<AstOf<Grammar, "sign">["children"], { alternative: 1 }>["value"],
+      "-"
     >
   >,
   /** optional → the value or undefined. */
@@ -92,17 +110,24 @@ export type Assertions = [
   >,
   /** repetition → every iteration. */
   Expect<Equal<AstOf<Grammar, "digits">["children"], readonly DigitNode[]>>,
-  Expect<Equal<AstOf<Grammar, "padding">["children"], readonly string[]>>,
+  Expect<Equal<AstOf<Grammar, "padding">["children"], readonly " "[]>>,
   /** references compose through several levels. */
   Expect<
     Equal<
       AstOf<Grammar, "date">["children"],
       readonly [
         AstOf<Grammar, "year">,
-        Node<"dash", string>,
+        Node<"dash", "-">,
         AstOf<Grammar, "month">,
         AstOf<Grammar, "offset">,
       ]
+    >
+  >,
+  /** a literal inline in a sequence → its value. */
+  Expect<
+    Equal<
+      AstOf<Grammar, "time">["children"],
+      readonly [AstOf<Grammar, "month">, ":", AstOf<Grammar, "month">]
     >
   >,
   /** a parser returns the rule's node. */

@@ -111,17 +111,19 @@ A grammar's type is a **flat union of `RuleDefinition<Name, Body>`**. `.define()
 - **Naming the `Ast` alias inside `Children`/`AstOf`.** The checker prints a type through the alias it was reached by, and `Ast`'s first argument is the whole definition union, so hovers and emitted declarations showed 55 definitions instead of a node. `Children` and `AstOf` spell out `Node<…>`, which prints as the resolved tree.
 - **Inferring through the wide `Expr`.** A body typed as the whole `Expr` union, such as one built in a loop or a grammar that arrived as data, makes `Children` recurse through `Sequence<readonly Expr[]>` forever (TS2589). `Children` returns `unknown` when `Expr extends $Expr`, so `AstOf<Grammar, string>` is `Node<string, unknown>`. That check has to stay non-distributive, with `Expr` on the left.
 
+A literal's children are its value's type: `literal("-")` is `Literal<"-">`, and contributes `"-"`, so an `either` of literals narrows by its `alternative` index. A literal built from a runtime `string` is `Literal<string>` and contributes `string`. A range stays `string`; spelling a range out as a union of code points would cost an instantiation per code point.
+
 A lazy `interface … extends Node<…>` for reference nodes was also tried, as a guard against depth limits on long chains. It turned out unnecessary: the eager alias resolves a 300-rule chain read 299 levels deep at the same cost. It was dropped because it printed worse.
 
 `bun run bench:types` measures growth. Measured with TypeScript 5.9.3 and 7.0, which report identical counts (baseline import subtracted):
 
 | shape | 10 rules | 25    | 50     | 100    | TS5 check, 100 rules |
 | ----- | -------- | ----- | ------ | ------ | -------------------- |
-| chain | 2,377    | 7,477 | 20,477 | 63,352 | 0.08s                |
-| fan   | 1,614    | 4,899 | 13,374 | 41,574 | 0.06s                |
-| mixed | 2,287    | 7,327 | 20,227 | 62,902 | 0.08s                |
+| chain | 2,476    | 7,726 | 20,976 | 64,351 | 0.08s                |
+| fan   | 1,773    | 5,343 | 14,293 | 43,443 | 0.06s                |
+| mixed | 2,400    | 7,605 | 20,780 | 64,005 | 0.08s                |
 
-Per-rule cost rises gently, from about 240 to about 630 instantiations, because each builder's vocabulary has as many keys as the grammar so far. That quadratic term is inherent to letting every builder see every earlier rule, and it is small: fitted to these numbers, 500 rules would land near 1.2M, still under TS5's 5,000,000 limit. `test/stress/Realistic.ts` (56 rules: RFC 3339, semver, IPv4, a URI subset, a log line) costs **24,250** instantiations. `test/TypeBudget.test.ts` fails above 50,000. Raise that budget deliberately, with a new measurement, never to make a red run green.
+Per-rule cost rises gently, from about 250 to about 640 instantiations, because each builder's vocabulary has as many keys as the grammar so far. That quadratic term is inherent to letting every builder see every earlier rule, and it is small: fitted to these numbers, 500 rules would land near 1.2M, still under TS5's 5,000,000 limit. `test/stress/Realistic.ts` (56 rules: RFC 3339, semver, IPv4, a URI subset, a log line) costs **24,960** instantiations. `test/TypeBudget.test.ts` fails above 50,000. Raise that budget deliberately, with a new measurement, never to make a red run green.
 
 ## Differential fuzzing
 

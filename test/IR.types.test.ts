@@ -77,5 +77,5 @@ export type RepeatAssertions = [
       readonly Node<"digit", string>[]
     >
   >,
-  Expect<Equal<AstOf<typeof bounded, "bangs">["children"], readonly string[]>>,
+  Expect<Equal<AstOf<typeof bounded, "bangs">["children"], readonly "!"[]>>,
 ];
