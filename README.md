@@ -77,6 +77,35 @@ if (!failed.ok) {
 
 The parser accepts exactly the strings the regex accepts, and where an input could be read more than one way, it returns the reading the regex would pick. Every loop iteration is kept, unlike a regex capture inside a loop. See the [docs site](https://docs.ghostry.dev/aster) for the full guide.
 
+## A grammar you can read
+
+A regex packs a whole format into one line of punctuation. Aster lets you write it as named rules, and does the escaping, grouping, and quantifiers for you:
+
+```ts
+const version = grammar()
+  .define("digit", () => range("0", "9"))
+  .define("number", ({ digit }) =>
+    either(literal("0"), sequence([range("1", "9"), zeroOrMore(digit)])),
+  )
+  .define("tag", () => oneOrMore(either(range("a", "z"), range("0", "9"))))
+  .define("version", ({ number, tag }) =>
+    sequence([
+      number,
+      literal("."),
+      number,
+      literal("."),
+      number,
+      optional(sequence([literal("-"), tag])),
+    ]),
+  )
+  .compose();
+
+toPattern(version, "version");
+// "^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9a-z]+)?$"
+```
+
+`number` is written once and used three times, where the regex repeats it in full. TypeScript checks every rule name, so a typo is a type error rather than a regex that quietly matches something else. See [Defining grammars](https://docs.ghostry.dev/aster/guides/grammars).
+
 ## Safe by default
 
 A backtracking regex engine can take exponential time on a pattern that matches the same input in many ways, such as `(?:\w+| )*`. `toPattern` and `toRegExp` analyze every pattern and throw rather than return one that can take superlinear time:
